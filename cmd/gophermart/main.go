@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/gomodule/redigo/redis"
 	"github.com/gorilla/mux"
 	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/joho/godotenv"
@@ -37,13 +36,9 @@ func main() {
 		log.Fatalf("unable to reach PostgreSQL: %v", err)
 	}
 
-	redisConn, err := redis.DialURL(cfg["REDIS_ADDR"])
-	if err != nil {
-		log.Fatalf("main: can't connect to Redis")
-	}
-
 	usersRepo := user.NewUserRepo(db)
-	sessionManager := sessions.NewSessionManager(cfg["SECRET_KEY"], redisConn)
+	sessionRepo := sessions.NewSessionRepo(db)
+	sessionManager := sessions.NewSessionManager(cfg["SECRET_KEY"], sessionRepo)
 	userHandler := api.NewUserHandler(usersRepo, sessionManager)
 	r := mux.NewRouter()
 
@@ -53,8 +48,8 @@ func main() {
 	api.HandleFunc("/user/register", userHandler.Register).Methods("POST")
 	api.HandleFunc("/user/login", userHandler.LogIn).Methods("POST")
 
-	auth := middleware.NewAuthMiddleware(sessionManager, usersRepo)
-	r.Use(auth.Middleware)
+	// auth := middleware.NewAuthMiddleware(sessionManager, usersRepo)
+	// r.Use(auth.Middleware)
 
 	logMiddleware := middleware.NewLoggingMiddleware(logger.Run(cfg["LOG_LEVEL"]))
 	r.Use(logMiddleware.SetupTracing)

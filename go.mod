@@ -3,8 +3,6 @@ module github.com/amiskov/cumulative-loyalty-system
 go 1.18
 
 require (
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
-	github.com/gomodule/redigo v1.8.9
 	github.com/gorilla/mux v1.8.0
 	github.com/jackc/pgx/v4 v4.17.2
 	github.com/joho/godotenv v1.4.0

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -18,14 +17,14 @@ type (
 		Add(*user.User) (string, error)
 	}
 
-	SessionManager interface {
-		CreateToken(*user.User) (string, error)
-		CleanupUserSessions(userId string) error
+	ISessionManager interface {
+		Create(userId string) (string, error)
+		Check(sessionId, userId string) error
 	}
 
 	UserHandler struct {
 		Repo           UserRepo
-		SessionManager SessionManager
+		SessionManager ISessionManager
 	}
 
 	HttpUser struct {
@@ -34,7 +33,7 @@ type (
 	}
 )
 
-func NewUserHandler(r UserRepo, sm SessionManager) *UserHandler {
+func NewUserHandler(r UserRepo, sm ISessionManager) *UserHandler {
 	return &UserHandler{
 		Repo:           r,
 		SessionManager: sm,
@@ -74,13 +73,13 @@ func (uh UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	user.Id = id
 
-	sessID := common.RandStringRunes(32)
-	// TODO: save session to db, check it on login
-	// _, err = uh.Repo.Exec("INSERT INTO sessions(id, user_id) VALUES(?, ?)", sessID, user.Id)
-	// if err != nil {
-	// 	return err
-	// }
+	// Create user session
 
+	sessID, err := uh.SessionManager.Create(user.Id)
+	if err != nil {
+		common.WriteMsg(w, "can't create session", http.StatusInternalServerError)
+		return
+	}
 	cookie := &http.Cookie{
 		Name:    "session_id",
 		Value:   sessID,
@@ -89,9 +88,10 @@ func (uh UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, cookie)
 
+	// Set headers and send response
+
 	w.Header().Set("Authorization", "With Cookie")
 	w.WriteHeader(http.StatusOK)
-	// uh.sendToken(w, user)
 	resp := struct {
 		Login    string `json:"login"`
 		Password string `json:"password"`
@@ -113,6 +113,8 @@ func (uh UserHandler) LogIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if user exists
+
 	user, err := uh.Repo.GetByLoginAndPass(httpUser.Login, httpUser.Password)
 	if err != nil {
 		logger.Log(r.Context()).Errorf("can't get the user by login `%s` and password: %v",
@@ -121,28 +123,27 @@ func (uh UserHandler) LogIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Remove expired user session if there are any
-	if err := uh.SessionManager.CleanupUserSessions(user.Id); err != nil {
-		logger.Log(r.Context()).Errorf("user/handlers: can't cleanup sessions for user `%s`, %v",
-			httpUser.Login, err)
-		common.WriteMsg(w, "failed managing user sessions", http.StatusInternalServerError)
+	// Check user session
+
+	// TODO: use auth middleware and session from request
+
+	sessionCookie, err := r.Cookie("session_id")
+	if err == http.ErrNoCookie {
+		logger.Log(r.Context()).Errorf("bad cookie for user `%s`. %v", httpUser.Login, err)
 		return
 	}
+	fmt.Printf("cookie: %#v\n", sessionCookie)
+	uh.SessionManager.Check(sessionCookie.Value, user.Id)
 
 	w.WriteHeader(http.StatusOK)
-	uh.sendToken(w, user)
 }
 
-func (uh *UserHandler) sendToken(w http.ResponseWriter, user *user.User) {
-	token, err := uh.SessionManager.CreateToken(user)
-	if err != nil {
-		logger.Log(context.Background()).Errorf("can't create JWT token from user: %v", err)
-		common.WriteMsg(w, "user authentication failed", http.StatusInternalServerError)
-		return
+func (uh *UserHandler) LogOut(w http.ResponseWriter, user *user.User) {
+	// TODO: remove from sessions table
+	cookie := http.Cookie{
+		Name:    "session_id",
+		Expires: time.Now().AddDate(0, 0, -1),
+		Path:    "/",
 	}
-
-	tk := struct {
-		Token string `json:"token"`
-	}{token}
-	common.WriteRespJSON(w, tk)
+	http.SetCookie(w, &cookie)
 }
