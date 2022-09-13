@@ -4,16 +4,19 @@ DB = postgresql://localhost/accrual?sslmode=disable
 migup:
 	migrate -database ${DB} -path migrations up
 migdrop:
-	migrate -database $$(DB) -path migrations drop
+	migrate -database ${DB} -path migrations drop
 remig:
 	make migdrop && make migup
 
+prep:
+	cat m.json | http POST http://localhost:8888/api/goods ; \
+	cat q.json | http POST http://localhost:8888/api/orders
 run:
 	go run cmd/gophermart/main.go
 runaccural:
 	./cmd/accrual/accrual_darwin_amd64 \
 	-a=":8888" \
-	-d="postgresql://localhost/accrual?sslmode=disable"
+	-d=${DB}
 build:
 	go build ./cmd/gophermart/...
 
@@ -23,12 +26,12 @@ upd:
 test:
 	make build && \
 	../go-autotests/bin/gophermarttest \
-	-test.v -test.run=^TestGophermart/TestEndToEnd/login_user \
+	-test.v -test.run=^TestGophermart/TestEndToEnd/ \
 	-gophermart-binary-path=./gophermart \
 	-gophermart-host=localhost \
 	-gophermart-port=8080 \
-	-gophermart-database-uri="postgresql://localhost/gophermart_cls?sslmode=disable" \
+	-gophermart-database-uri=${DB} \
 	-accrual-binary-path=cmd/accrual/accrual_darwin_amd64 \
 	-accrual-host=localhost \
 	-accrual-port=$$(../go-autotests/bin/random unused-port) \
-	-accrual-database-uri="postgresql://localhost/accrual?sslmode=disable"
+	-accrual-database-uri=${DB}
