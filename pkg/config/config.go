@@ -8,7 +8,7 @@ import (
 type Config struct {
 	RunAddress           string
 	DatabaseURI          string
-	AccrualSystemAddress string
+	AccrualSystemAddress string // full address, like `http//localhost:8888`
 	LogLevel             string
 	SecretKey            string
 }
@@ -17,7 +17,7 @@ func Parse() *Config {
 	cfg := Config{
 		// Defaults
 		RunAddress:           "localhost:8080",
-		AccrualSystemAddress: "localhost:8888",
+		AccrualSystemAddress: "http://localhost:8888",
 		SecretKey:            "secret",
 		LogLevel:             "debug",
 	}

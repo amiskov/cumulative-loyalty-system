@@ -30,7 +30,7 @@ func (sr *SessionRepo) GetUserSession(sessionId, userId string) (*Session, error
 	row := sr.DB.QueryRow(`SELECT session_id, user_id, expiration_date FROM sessions WHERE session_id = $1 and user_id = $2`,
 		sessionId, userId)
 	s := new(Session)
-	err := row.Scan(&s)
+	err := row.Scan(&s.Id, &s.UserId, &s.Expiration)
 	if err != nil {
 		return nil, err
 	}

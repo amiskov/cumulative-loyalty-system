@@ -48,7 +48,7 @@ func main() {
 	}
 
 	httpClient := resty.New().
-		SetHostURL(`http://` + cfg.AccrualSystemAddress).
+		SetHostURL(cfg.AccrualSystemAddress).
 		SetCookieJar(jar)
 
 	sessionRepo := sessions.NewSessionRepo(db)

@@ -2,7 +2,6 @@ package common
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"math/rand"
@@ -45,9 +44,7 @@ func ParseReqBody(body io.Reader, ptr interface{}) error {
 }
 
 func WriteRespJSON(w http.ResponseWriter, data interface{}) {
-	fmt.Println("data:", data)
 	resp, err := json.Marshal(data)
-	fmt.Println("resp:", string(resp))
 	if err != nil {
 		log.Println("common: JSON marshaling failed", err)
 		WriteMsg(w, "response failed", http.StatusInternalServerError)

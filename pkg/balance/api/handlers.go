@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -29,6 +28,7 @@ func (bh *BalanceHandler) GetUserBalance(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/json")
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	type order struct {
 		Number     string    `json:"number"`
 		Status     string    `json:"status"`
@@ -42,22 +42,14 @@ func (bh *BalanceHandler) GetUserBalance(w http.ResponseWriter, r *http.Request)
 		SetResult(&orders)
 
 	resp, err := req.Get("/api/orders")
-	cancel()
-
-	fmt.Printf("Orders: %#v\n", orders)
-
 	if err != nil {
-		logger.Log(r.Context()).Errorf("failed sending request to accrual")
+		logger.Log(r.Context()).Errorf("balance/handler.GetUserBalance: failed sending request to accrual")
 		common.WriteMsg(w, "failed sending request to accrual", http.StatusInternalServerError)
 		return
 	}
-	fmt.Printf("GetOrdersList resp: %#v\n", string(resp.Body()))
 	respStatus := resp.StatusCode()
 	w.WriteHeader(respStatus)
 	common.WriteRespJSON(w, orders)
-
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"GetUserBalance": "test"}`))
 }
 
 func (bh *BalanceHandler) Withdraw(w http.ResponseWriter, r *http.Request) {

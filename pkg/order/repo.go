@@ -16,10 +16,12 @@ func NewOrderRepo(db *sql.DB) *OrderRepo {
 }
 
 func (or *OrderRepo) GetOrders(userId string) ([]*Order, error) {
-	rows, err := or.db.Query("SELECT id, updated_at FROM orders WHERE user_id=$1 ORDER BY UPDATED_AT DESC", userId)
+	rows, err := or.db.Query("SELECT id, uploaded_at FROM orders WHERE user_id=$1 ORDER BY uploaded_at DESC", userId)
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
+
 	dbUserOrders := []*Order{}
 	for rows.Next() {
 		o := new(Order)

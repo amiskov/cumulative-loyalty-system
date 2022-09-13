@@ -26,7 +26,7 @@ upd:
 test:
 	make build && \
 	../go-autotests/bin/gophermarttest \
-	-test.v -test.run=^TestGophermart/TestEndToEnd/login_user \
+	-test.v -test.run=^TestGophermart/TestEndToEnd/ \
 	-gophermart-binary-path=./gophermart \
 	-gophermart-host=localhost \
 	-gophermart-port=8080 \

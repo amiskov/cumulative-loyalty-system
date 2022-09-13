@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -14,6 +15,7 @@ import (
 	"github.com/amiskov/cumulative-loyalty-system/pkg/common"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/order"
+	"github.com/amiskov/cumulative-loyalty-system/pkg/sessions"
 )
 
 type IOrderRepo interface {
@@ -44,23 +46,49 @@ func (oh OrderHandler) GetOrdersList(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	o := &order.Order{}
-	req := oh.client.R().
-		SetContext(ctx).
-		SetResult(&o)
-		// SetResult(&orders)
-
-	resp, err := req.Get("/api/orders" + `/2060100522`)
+	currentUser, err := sessions.GetAuthUser(r.Context())
 	if err != nil {
-		logger.Log(r.Context()).Errorf("failed sending request to accrual, %v", err)
-		common.WriteMsg(w, "failed sending request to accrual", http.StatusInternalServerError)
+		logger.Log(r.Context()).Errorf("order/handlers.GetOrderList: can't get authorized user, %v", err)
+		common.WriteMsg(w, "auth user not found", http.StatusBadRequest)
 		return
 	}
-	fmt.Println("order", o)
-	fmt.Printf("GetOrdersList resp: %#v\n", string(resp.Body()))
-	respStatus := resp.StatusCode()
-	w.WriteHeader(respStatus)
-	common.WriteRespJSON(w, nil)
+
+	currentUserOrders, err := oh.repo.GetOrders(currentUser.Id)
+	if err != nil {
+		logger.Log(r.Context()).Errorf("order/handlers.GetOrderList: can't get user orders, %v", err)
+		common.WriteMsg(w, "user orders not found", http.StatusBadRequest)
+		return
+	}
+
+	// Orders with information from accrual (not only DB)
+	respOrders := []*order.Order{}
+
+	var wg sync.WaitGroup
+	for _, o := range currentUserOrders { // orders from DB
+		wg.Add(1)
+		go func(ord *order.Order) {
+			defer wg.Done()
+
+			accrualOrder := &order.Order{} // orders with full info (inc accrual)
+			req := oh.client.R().
+				SetContext(ctx).
+				SetResult(&accrualOrder)
+			resp, err := req.Get("/api/orders/" + ord.Number)
+			if err != nil {
+				logger.Log(r.Context()).Errorf("order/handlers.GetOrdersList: failed sending request to accrual, %v", err)
+				common.WriteMsg(w, "failed sending request to accrual", http.StatusInternalServerError)
+				return
+			}
+			respOrders = append(respOrders, accrualOrder)
+			fmt.Println("order", ord)
+			// respStatus := resp.StatusCode()
+			fmt.Printf("GetOrdersList resp: %#v\n", string(resp.Body()))
+		}(o)
+	}
+	wg.Wait()
+
+	w.WriteHeader(http.StatusOK)
+	common.WriteRespJSON(w, []*order.Order{})
 }
 
 func (oh OrderHandler) SendToAccrual(w http.ResponseWriter, r *http.Request) {
@@ -92,8 +120,14 @@ func (oh OrderHandler) SendToAccrual(w http.ResponseWriter, r *http.Request) {
 	// 500 — внутренняя ошибка сервера.
 
 	orderSNum := strconv.Itoa(orderNum)
-	userId := "someUser"
-	err = oh.repo.AddOrder(orderSNum, userId)
+	usr, err := sessions.GetAuthUser(r.Context())
+	if err != nil {
+		logger.Log(r.Context()).Errorf("order/handlers: can't get authorized user, %v", err)
+		common.WriteMsg(w, "user not found", http.StatusBadRequest)
+		return
+	}
+
+	err = oh.repo.AddOrder(orderSNum, usr.Id)
 	if err != nil {
 		logger.Log(r.Context()).Errorf("order/handlers: failed add order, %w", err)
 		common.WriteMsg(w, "order number is not valid", http.StatusInternalServerError)
@@ -103,7 +137,7 @@ func (oh OrderHandler) SendToAccrual(w http.ResponseWriter, r *http.Request) {
 	resp, err := oh.client.R().
 		Get("/api/orders/" + strconv.Itoa(orderNum))
 	if err != nil {
-		logger.Log(r.Context()).Errorf("failed sending request to accrual, %v", err)
+		logger.Log(r.Context()).Errorf("order/handlers.SendToAccrual: failed sending request to accrual, %v", err)
 		common.WriteMsg(w, "failed sending request to accrual", http.StatusInternalServerError)
 		return
 	}
