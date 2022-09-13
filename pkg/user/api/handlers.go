@@ -1,9 +1,9 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/amiskov/cumulative-loyalty-system/pkg/common"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
@@ -18,8 +18,8 @@ type (
 	}
 
 	ISessionManager interface {
-		Create(userId string) (string, error)
-		Check(sessionId, userId string) error
+		CreateToken(*user.User) (string, error)
+		// CleanupUserSessions(userId string) error
 	}
 
 	UserHandler struct {
@@ -73,33 +73,14 @@ func (uh UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	user.Id = id
 
-	// Create user session
-
-	sessID, err := uh.SessionManager.Create(user.Id)
+	token, err := uh.SessionManager.CreateToken(user)
 	if err != nil {
-		common.WriteMsg(w, "can't create session", http.StatusInternalServerError)
+		logger.Log(context.Background()).Errorf("can't create JWT token from user: %v", err)
+		common.WriteMsg(w, "user authentication failed", http.StatusInternalServerError)
 		return
 	}
-	cookie := &http.Cookie{
-		Name:    "session_id",
-		Value:   sessID,
-		Expires: time.Now().Add(90 * 24 * time.Hour),
-		Path:    "/",
-	}
-	http.SetCookie(w, cookie)
-
-	// Set headers and send response
-
-	w.Header().Set("Authorization", "With Cookie")
+	w.Header().Set("Authorization", `Bearer `+token)
 	w.WriteHeader(http.StatusOK)
-	resp := struct {
-		Login    string `json:"login"`
-		Password string `json:"password"`
-	}{
-		Login:    httpUser.Login,
-		Password: httpUser.Password,
-	}
-	common.WriteRespJSON(w, resp)
 }
 
 func (uh UserHandler) LogIn(w http.ResponseWriter, r *http.Request) {
@@ -115,7 +96,7 @@ func (uh UserHandler) LogIn(w http.ResponseWriter, r *http.Request) {
 
 	// Check if user exists
 
-	user, err := uh.Repo.GetByLoginAndPass(httpUser.Login, httpUser.Password)
+	usr, err := uh.Repo.GetByLoginAndPass(httpUser.Login, httpUser.Password)
 	if err != nil {
 		logger.Log(r.Context()).Errorf("can't get the user by login `%s` and password: %v",
 			httpUser.Login, err)
@@ -123,27 +104,35 @@ func (uh UserHandler) LogIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check user session
-
-	// TODO: use auth middleware and session from request
-
-	sessionCookie, err := r.Cookie("session_id")
-	if err == http.ErrNoCookie {
-		logger.Log(r.Context()).Errorf("bad cookie for user `%s`. %v", httpUser.Login, err)
+	token, err := uh.SessionManager.CreateToken(usr)
+	if err != nil {
+		logger.Log(context.Background()).Errorf("can't create JWT token from user: %v", err)
+		common.WriteMsg(w, "user authentication failed", http.StatusInternalServerError)
 		return
 	}
-	fmt.Printf("cookie: %#v\n", sessionCookie)
-	uh.SessionManager.Check(sessionCookie.Value, user.Id)
-
+	w.Header().Set("Authorization", `Bearer `+token)
 	w.WriteHeader(http.StatusOK)
 }
 
 func (uh *UserHandler) LogOut(w http.ResponseWriter, user *user.User) {
-	// TODO: remove from sessions table
-	cookie := http.Cookie{
-		Name:    "session_id",
-		Expires: time.Now().AddDate(0, 0, -1),
-		Path:    "/",
+}
+
+func (uh *UserHandler) createSessionAndSendToken(w http.ResponseWriter, user *user.User, pass string) {
+	token, err := uh.SessionManager.CreateToken(user)
+	if err != nil {
+		logger.Log(context.Background()).Errorf("can't create JWT token from user: %v", err)
+		common.WriteMsg(w, "user authentication failed", http.StatusInternalServerError)
+		return
 	}
-	http.SetCookie(w, &cookie)
+
+	w.Header().Set("Authorization", `Bearer `+token)
+
+	tk := struct {
+		Login    string `json:"login"`
+		Password string `json:"password"`
+	}{
+		Login:    user.Login,
+		Password: pass,
+	}
+	common.WriteRespJSON(w, tk)
 }

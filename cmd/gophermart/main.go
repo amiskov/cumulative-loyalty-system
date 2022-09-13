@@ -3,9 +3,11 @@ package main
 import (
 	"database/sql"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/http/cookiejar"
 	"os"
+	"time"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/gorilla/mux"
@@ -23,14 +25,11 @@ import (
 	userApi "github.com/amiskov/cumulative-loyalty-system/pkg/user/api"
 )
 
-// type EnvConfig map[string]string
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 func main() {
-	// var cfg EnvConfig = readDotenv()
-	// err := godotenv.Load()
-	// if err != nil {
-	// 	log.Fatal("Error loading .env file")
-	// }
 	cfg := config.Parse()
 
 	db, err := sql.Open("pgx", cfg.DatabaseURI)
@@ -45,7 +44,6 @@ func main() {
 
 	jar, err := cookiejar.New(nil)
 	if err != nil {
-		// TODO
 		log.Fatalln("can't create cookie jar")
 	}
 
@@ -82,8 +80,8 @@ func main() {
 	api.HandleFunc("/user/balance/withdraw", balanceHandler.Withdraw).Methods("POST")
 	api.HandleFunc("/user/balance/withdrawals", balanceHandler.Withdrawalls).Methods("GET")
 
-	// auth := middleware.NewAuthMiddleware(sessionManager, usersRepo)
-	// r.Use(auth.Middleware)
+	auth := middleware.NewAuthMiddleware(sessionManager, usersRepo)
+	r.Use(auth.Middleware)
 
 	logMiddleware := middleware.NewLoggingMiddleware(logger.Run(cfg.LogLevel))
 	r.Use(logMiddleware.SetupTracing)

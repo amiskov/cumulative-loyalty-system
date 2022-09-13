@@ -46,11 +46,11 @@ func (r *UserRepo) GetByLoginAndPass(uname string, pass string) (*User, error) {
 	return u, nil
 }
 
-func (r *UserRepo) UserExists(uname string) bool {
-	row := r.db.QueryRow("SELECT id FROM users where login=$1", uname)
+func (r *UserRepo) UserExists(login string) bool {
+	row := r.db.QueryRow("SELECT id FROM users where login=$1", login)
 	u := new(User)
 	if err := row.Scan(&u.Id); err != nil {
-		log.Printf("user/repo.UserExists, could not scan row user doesn't exist: %v", err)
+		log.Printf("user/repo.UserExists, could not scan row, user `%s` doesn't exist: %v", login, err)
 		return false
 	}
 	return true
