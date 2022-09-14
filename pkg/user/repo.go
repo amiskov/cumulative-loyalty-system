@@ -27,7 +27,7 @@ func (r *UserRepo) Add(u *User) (string, error) {
 	err := r.db.QueryRow("INSERT INTO users(login, password) VALUES($1, $2) RETURNING id",
 		u.Login, u.Password).Scan(&userID)
 	if err != nil {
-		return ``, err
+		return ``, fmt.Errorf("user/repo: failed insert user, %w", err)
 	}
 	return strconv.Itoa(userID), nil
 }

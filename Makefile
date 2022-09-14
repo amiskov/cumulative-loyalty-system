@@ -12,7 +12,7 @@ prep:
 	cat m.json | http POST http://localhost:8888/api/goods ; \
 	cat q.json | http POST http://localhost:8888/api/orders
 run:
-	go run cmd/gophermart/main.go
+	go run cmd/gophermart/main.go -d=${DB}
 runaccural:
 	./cmd/accrual/accrual_darwin_amd64 \
 	-a=":8888" \

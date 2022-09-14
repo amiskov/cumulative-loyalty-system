@@ -68,6 +68,7 @@ func (uh UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := uh.Repo.Add(user)
 	if err != nil {
+		logger.Log(r.Context()).Errorf("user/repo.Register: can't add user to DB: %v", err)
 		common.WriteMsg(w, "can't add user", http.StatusInternalServerError)
 		return
 	}
