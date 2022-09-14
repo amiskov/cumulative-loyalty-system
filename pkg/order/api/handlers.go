@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/jackc/pgconn"
 	"github.com/theplant/luhn"
 
 	"github.com/amiskov/cumulative-loyalty-system/pkg/common"
@@ -111,10 +113,18 @@ func (oh OrderHandler) SendToAccrual(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_, err = sessions.GetAuthUser(r.Context())
+	if err != nil {
+		logger.Log(r.Context()).Errorf("order/handlers.SendToAccrual: user authorized, %v",
+			err)
+		common.WriteMsg(w, "user not authorized", http.StatusUnauthorized)
+		return
+	}
+
 	// 200 — номер заказа уже был загружен этим пользователем;
 	// 202 — новый номер заказа принят в обработку;
 	// 400 — неверный формат запроса;
-	// 401 — пользователь не аутентифицирован;
+	// x 401 — пользователь не аутентифицирован;
 	// 409 — номер заказа уже был загружен другим пользователем;
 	// 422 — неверный формат номера заказа;
 	// 500 — внутренняя ошибка сервера.
@@ -127,23 +137,29 @@ func (oh OrderHandler) SendToAccrual(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO: send to accrual first (see at the bottom) and add only if it's OK
+
+	var pgErr *pgconn.PgError
 	err = oh.repo.AddOrder(orderSNum, usr.Id)
-	if err != nil {
-		logger.Log(r.Context()).Errorf("order/handlers: failed add order, %w", err)
-		common.WriteMsg(w, "order number is not valid", http.StatusInternalServerError)
+
+	// Order already added, this is fine
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		common.WriteMsg(w, "order is already added", http.StatusOK)
 		return
 	}
 
-	resp, err := oh.client.R().
-		Get("/api/orders/" + strconv.Itoa(orderNum))
+	if err != nil {
+		logger.Log(r.Context()).Errorf("order/handlers: failed add order, %w", err)
+		common.WriteMsg(w, "can't add order", http.StatusInternalServerError)
+		return
+	}
+
+	resp, err := oh.client.R().Get("/api/orders/" + strconv.Itoa(orderNum))
 	if err != nil {
 		logger.Log(r.Context()).Errorf("order/handlers.SendToAccrual: failed sending request to accrual, %v", err)
 		common.WriteMsg(w, "failed sending request to accrual", http.StatusInternalServerError)
 		return
 	}
-	respStatus := resp.StatusCode()
-	fmt.Printf("resp: %#v\n", resp.RawResponse)
-	w.WriteHeader(respStatus)
-	w.Write([]byte(`{"hello": "world"}`))
-	// common.WriteRespJSON(w, {})
+	fmt.Println("RESP:", resp)
+	common.WriteMsg(w, "order has been added", resp.StatusCode())
 }
