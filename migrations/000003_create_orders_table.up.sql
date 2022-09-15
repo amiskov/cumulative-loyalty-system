@@ -4,6 +4,6 @@ CREATE TABLE IF NOT EXISTS orders(
   id VARCHAR(128) PRIMARY KEY,
   user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
   uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  accrual INTEGER,
+  accrual NUMERIC(6,2),
   status order_status NOT NULL DEFAULT 'NEW'
 );

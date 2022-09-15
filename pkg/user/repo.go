@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 
 	"github.com/amiskov/cumulative-loyalty-system/pkg/common"
@@ -46,14 +45,13 @@ func (r *UserRepo) GetByLoginAndPass(uname string, pass string) (*User, error) {
 	return u, nil
 }
 
-func (r *UserRepo) UserExists(login string) bool {
+func (r *UserRepo) UserExists(login string) (bool, error) {
 	row := r.db.QueryRow("SELECT id FROM users where login=$1", login)
 	u := new(User)
 	if err := row.Scan(&u.Id); err != nil {
-		log.Printf("user/repo.UserExists, could not scan row, user `%s` doesn't exist: %v", login, err)
-		return false
+		return false, fmt.Errorf("user/repo.UserExists, could not scan row, user `%s` doesn't exist: %v", login, err)
 	}
-	return true
+	return true, nil
 }
 
 func (r *UserRepo) GetById(ctx context.Context, uid string) (*User, error) {

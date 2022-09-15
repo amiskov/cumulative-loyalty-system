@@ -12,7 +12,7 @@ import (
 
 type (
 	UserRepo interface {
-		UserExists(string) bool
+		UserExists(string) (bool, error)
 		GetByLoginAndPass(string, string) (*user.User, error)
 		Add(*user.User) (string, error)
 	}
@@ -52,7 +52,8 @@ func (uh UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if user already exists
-	if uh.Repo.UserExists(httpUser.Login) {
+	userExists, _ := uh.Repo.UserExists(httpUser.Login)
+	if userExists {
 		msg := fmt.Sprintf(`user "%s" already exists`, httpUser.Login)
 		logger.Log(r.Context()).Error(msg)
 		common.WriteMsg(w, msg, http.StatusConflict)
