@@ -16,7 +16,9 @@ func NewOrderRepo(db *sql.DB) *OrderRepo {
 }
 
 func (or *OrderRepo) GetOrders(userId string) ([]*Order, error) {
-	rows, err := or.db.Query("SELECT id, user_id, accrual, status, uploaded_at FROM orders WHERE user_id=$1 ORDER BY uploaded_at DESC",
+	q := `SELECT id, user_id, accrual, status, uploaded_at FROM orders
+	      WHERE user_id=$1 ORDER BY uploaded_at DESC`
+	rows, err := or.db.Query(q,
 		userId)
 	if err != nil {
 		return nil, err
@@ -40,6 +42,17 @@ func (or *OrderRepo) AddOrder(order *Order) error {
 	if err != nil {
 		return fmt.Errorf("order/repo: failed inserting order, %w", err)
 	}
+
+	// TODO: Probably, this should be a separated process.
+	if order.Status == "PROCESSED" {
+		q := `UPDATE users SET balance = balance + $1 WHERE id = $2 RETURNING balance`
+		var newBalance float32
+		err := or.db.QueryRow(q, order.Accrual, order.UserId).Scan(&newBalance)
+		if err != nil {
+			return fmt.Errorf("order/repo: failed updating balance, %w", err)
+		}
+	}
+
 	return nil
 }
 
