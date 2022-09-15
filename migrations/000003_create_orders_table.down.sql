@@ -1,2 +1,2 @@
-DROP TYPE IF EXISTS order_status;
+DROP TYPE IF EXISTS order_status CASCADE;
 DROP TABLE IF EXISTS orders;

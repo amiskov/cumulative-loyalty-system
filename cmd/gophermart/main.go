@@ -78,7 +78,7 @@ func main() {
 	// Balance
 	api.HandleFunc("/user/balance", balanceHandler.GetUserBalance).Methods("GET")
 	api.HandleFunc("/user/balance/withdraw", balanceHandler.Withdraw).Methods("POST")
-	api.HandleFunc("/user/balance/withdrawals", balanceHandler.Withdrawalls).Methods("GET")
+	api.HandleFunc("/user/withdrawals", balanceHandler.Withdrawalls).Methods("GET")
 
 	auth := middleware.NewAuthMiddleware(sessionManager, usersRepo)
 	r.Use(auth.Middleware)
