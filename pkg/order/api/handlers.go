@@ -2,7 +2,7 @@ package api
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
-	"github.com/jackc/pgconn"
 	"github.com/theplant/luhn"
 
 	"github.com/amiskov/cumulative-loyalty-system/pkg/common"
@@ -22,7 +21,8 @@ import (
 
 type IOrderRepo interface {
 	GetOrders(string) ([]*order.Order, error)
-	AddOrder(orderId, userId string) error
+	AddOrder(*order.Order) error
+	GetOrder(string) (*order.Order, error)
 }
 
 type OrderHandler struct {
@@ -93,15 +93,27 @@ func (oh OrderHandler) GetOrdersList(w http.ResponseWriter, r *http.Request) {
 	common.WriteRespJSON(w, []*order.Order{})
 }
 
-func (oh OrderHandler) SendToAccrual(w http.ResponseWriter, r *http.Request) {
+// Add order to the loyalty system.
+//
+// Possible status code:
+// - 200 — номер заказа уже был загружен этим пользователем;
+// - 202 — новый номер заказа принят в обработку;
+// - 400 — неверный формат запроса;
+// - 401 — пользователь не аутентифицирован;
+// - 409 — номер заказа уже был загружен другим пользователем;
+// - 422 — неверный формат номера заказа;
+// - 500 — внутренняя ошибка сервера.
+func (oh OrderHandler) AddOrder(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	// Parse order number
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		logger.Log(r.Context()).Errorf("order/handlers: failed parsing order number from post body")
 		common.WriteMsg(w, "order number is not valid", http.StatusBadRequest)
 	}
 
+	// Validate order number
 	orderNum, err := strconv.Atoi(string(body))
 	if err != nil {
 		logger.Log(r.Context()).Errorf("order/handlers: failed converting order number from string")
@@ -112,24 +124,9 @@ func (oh OrderHandler) SendToAccrual(w http.ResponseWriter, r *http.Request) {
 		common.WriteMsg(w, "order number is not valid", http.StatusUnprocessableEntity)
 		return
 	}
+	validOrderNum := strconv.Itoa(orderNum)
 
-	_, err = sessions.GetAuthUser(r.Context())
-	if err != nil {
-		logger.Log(r.Context()).Errorf("order/handlers.SendToAccrual: user authorized, %v",
-			err)
-		common.WriteMsg(w, "user not authorized", http.StatusUnauthorized)
-		return
-	}
-
-	// 200 — номер заказа уже был загружен этим пользователем;
-	// 202 — новый номер заказа принят в обработку;
-	// 400 — неверный формат запроса;
-	// x 401 — пользователь не аутентифицирован;
-	// 409 — номер заказа уже был загружен другим пользователем;
-	// 422 — неверный формат номера заказа;
-	// 500 — внутренняя ошибка сервера.
-
-	orderSNum := strconv.Itoa(orderNum)
+	// Get current user
 	usr, err := sessions.GetAuthUser(r.Context())
 	if err != nil {
 		logger.Log(r.Context()).Errorf("order/handlers: can't get authorized user, %v", err)
@@ -137,29 +134,67 @@ func (oh OrderHandler) SendToAccrual(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: send to accrual first (see at the bottom) and add only if it's OK
+	// Get order (check if it exists)
+	o, orderErr := oh.repo.GetOrder(validOrderNum)
 
-	var pgErr *pgconn.PgError
-	err = oh.repo.AddOrder(orderSNum, usr.Id)
-
-	// Order already added, this is fine
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+	// Order is already added, just sent OK status
+	if o != nil && orderErr == nil && o.UserId == usr.Id {
 		common.WriteMsg(w, "order is already added", http.StatusOK)
 		return
 	}
 
+	// Order exists but for the other user
+	if o != nil && orderErr == nil && o.UserId != usr.Id {
+		logger.Log(r.Context()).Errorf("order/handlers: user `%s` tries to get the order of user `%s`, %v",
+			usr.Id, o.UserId, orderErr)
+		common.WriteMsg(w, "order already added for another user", http.StatusConflict)
+		return
+	}
+
+	// Something unknown happened
+	if o != nil && orderErr != nil {
+		logger.Log(r.Context()).Errorf("order/handlers: failed getting order`, %v", orderErr)
+		common.WriteMsg(w, "unknown error", http.StatusInternalServerError)
+		return
+	}
+
+	// Order not found by the given number, check the accrual system.
+
+	resp, err := oh.client.R().Get("/api/orders/" + validOrderNum)
+	if err != nil {
+		logger.Log(r.Context()).Errorf("order/handlers: failed sending request to accrual, %v", err)
+		common.WriteMsg(w, "failed sending request to accrual", http.StatusInternalServerError)
+		return
+	}
+	fmt.Println("RESP:", resp)
+
+	// {"order":"2060100522","status":"PROCESSED","accrual":729.98}
+	httpOrder := struct {
+		Order   string
+		Status  string
+		Accrual float32
+	}{}
+	respJsonErr := json.Unmarshal(resp.Body(), &httpOrder)
+	if respJsonErr != nil {
+		logger.Log(r.Context()).Errorf("order/handlers: failed parsing response from accrual, %w", respJsonErr)
+		common.WriteMsg(w, "bad response from accrual system", http.StatusInternalServerError)
+		return
+	}
+
+	newOrder := &order.Order{
+		Number:  validOrderNum,
+		UserId:  usr.Id,
+		Accrual: httpOrder.Accrual,
+		// TODO: Probably just add as 'NEW' without even checking accrual in this method
+		// and later check for PROCESSED/INVALID separately?
+		Status: httpOrder.Status,
+	}
+	err = oh.repo.AddOrder(newOrder)
 	if err != nil {
 		logger.Log(r.Context()).Errorf("order/handlers: failed add order, %w", err)
 		common.WriteMsg(w, "can't add order", http.StatusInternalServerError)
 		return
 	}
 
-	resp, err := oh.client.R().Get("/api/orders/" + strconv.Itoa(orderNum))
-	if err != nil {
-		logger.Log(r.Context()).Errorf("order/handlers.SendToAccrual: failed sending request to accrual, %v", err)
-		common.WriteMsg(w, "failed sending request to accrual", http.StatusInternalServerError)
-		return
-	}
-	fmt.Println("RESP:", resp)
-	common.WriteMsg(w, "order has been added", resp.StatusCode())
+	common.WriteMsg(w, "order has been added", http.StatusAccepted)
 }

@@ -72,7 +72,7 @@ func main() {
 	api.HandleFunc("/user/login", userHandler.LogIn).Methods("POST")
 
 	// Order
-	api.HandleFunc("/user/orders", orderHandler.SendToAccrual).Methods("POST")
+	api.HandleFunc("/user/orders", orderHandler.AddOrder).Methods("POST")
 	api.HandleFunc("/user/orders", orderHandler.GetOrdersList).Methods("GET")
 
 	// Balance
