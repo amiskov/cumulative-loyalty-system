@@ -32,15 +32,15 @@ func init() {
 func main() {
 	cfg := config.Parse()
 
-	db, err := sql.Open("pgx", cfg.DatabaseURI)
-	if err != nil {
-		log.Printf("Unable to connect to database: %v\n", err)
+	db, openDBErr := sql.Open("pgx", cfg.DatabaseURI)
+	if openDBErr != nil {
+		log.Printf("Unable to connect to database: %v\n", openDBErr)
 		os.Exit(1)
 	}
-	defer db.Close()
-	if err := db.Ping(); err != nil {
-		log.Fatalf("unable to reach PostgreSQL: %v", err)
+	if pingErr := db.Ping(); pingErr != nil {
+		log.Fatalf("unable to reach PostgreSQL: %v", pingErr)
 	}
+	defer db.Close()
 
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -90,5 +90,4 @@ func main() {
 
 	log.Println("Serving at http://localhost:8080/")
 	log.Fatalln(http.ListenAndServe(":8080", r))
-
 }
