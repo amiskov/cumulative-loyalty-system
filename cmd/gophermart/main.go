@@ -88,6 +88,11 @@ func main() {
 	r.Use(logMiddleware.SetupLogging)
 	r.Use(logMiddleware.AccessLog)
 
-	log.Println("Serving at http://localhost:8080/")
-	log.Fatalln(http.ListenAndServe(":8080", r))
+	server := &http.Server{
+		Addr:              cfg.RunAddress,
+		Handler:           r,
+		ReadHeaderTimeout: 2 * time.Second,
+	}
+	log.Println("Serving at http://" + cfg.RunAddress + "/")
+	log.Fatalln(server.ListenAndServe())
 }

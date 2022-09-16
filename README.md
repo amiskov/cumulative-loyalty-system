@@ -1,3 +1,6 @@
+# Migrations
+Using `go-migrate`. Check `Makefile` for commands.
+
 # go-musthave-diploma-tpl
 
 Шаблон репозитория для индивидуального дипломного проекта курса «Go-разработчик»
