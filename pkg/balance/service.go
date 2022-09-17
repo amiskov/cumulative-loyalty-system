@@ -31,7 +31,7 @@ func (s *service) Withdrawals(ctx context.Context) ([]*Withdraw, error) {
 		return nil, err
 	}
 
-	withdrawals, err := s.repo.GetWithdrawals(usr.Id)
+	withdrawals, err := s.repo.GetWithdrawals(usr.ID)
 	if err != nil {
 		logger.Log(ctx).Errorf("balance/handlers: can't get user withdrawals, %v", err)
 		return nil, err
@@ -51,7 +51,7 @@ func (s *service) Withdraw(ctx context.Context, w *Withdraw) (newBalance float32
 	// TODO: make checking balance and updating balance in one query
 
 	// Get user balance
-	bal, err := s.repo.GetBalance(usr.Id)
+	bal, err := s.repo.GetBalance(usr.ID)
 	if err != nil {
 		logger.Log(ctx).Errorf("balance: can't get user balance, %v", err)
 		// common.WriteMsg(w, "can't get user balance", http.StatusBadRequest)
@@ -63,7 +63,7 @@ func (s *service) Withdraw(ctx context.Context, w *Withdraw) (newBalance float32
 		return 0, err
 	}
 
-	newBalance, err = s.repo.WithdrawFromUserBalance(usr.Id, w.Order, w.Sum)
+	newBalance, err = s.repo.WithdrawFromUserBalance(usr.ID, w.Order, w.Sum)
 	if err != nil {
 		logger.Log(ctx).Errorf("balance/handlers: withdraw failed, %v", err)
 		return 0, err
@@ -80,7 +80,7 @@ func (s *service) GetUserBalance(ctx context.Context) (*Balance, error) {
 	}
 
 	// Get user balance
-	bal, err := s.repo.GetBalance(usr.Id)
+	bal, err := s.repo.GetBalance(usr.ID)
 	if err != nil {
 		logger.Log(ctx).Errorf("balance/handlers: can't get user balance, %v", err)
 		return nil, err

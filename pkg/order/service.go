@@ -29,7 +29,7 @@ func NewService(r IOrderRepo, accrualAddr string) *service {
 		// TODO: Is it fine to use `log.Fatal` here?
 		log.Fatalln("can't create cookie jar")
 	}
-	httpClient := resty.New().SetHostURL(accrualAddr).SetCookieJar(jar)
+	httpClient := resty.New().SetBaseURL(accrualAddr).SetCookieJar(jar)
 
 	return &service{
 		repo:   r,
@@ -53,14 +53,14 @@ func (s *service) AddOrder(ctx context.Context, orderNum string) (*Order, error)
 	o, orderErr := s.repo.GetOrder(orderNum)
 
 	// Order is already added, just sent OK status
-	if o != nil && orderErr == nil && o.UserId == usr.Id {
+	if o != nil && orderErr == nil && o.UserID == usr.ID {
 		return nil, errOrderAlreadyAdded
 	}
 
 	// Order exists but for the other user
-	if o != nil && orderErr == nil && o.UserId != usr.Id {
+	if o != nil && orderErr == nil && o.UserID != usr.ID {
 		logger.Log(ctx).Errorf("order: user `%s` tries to get the order of user `%s`, %v",
-			usr.Id, o.UserId, orderErr)
+			usr.ID, o.UserID, orderErr)
 		return nil, errOrderExistsForOther
 	}
 
@@ -91,7 +91,7 @@ func (s *service) AddOrder(ctx context.Context, orderNum string) (*Order, error)
 
 	newOrder := &Order{
 		Number:  orderNum,
-		UserId:  usr.Id,
+		UserID:  usr.ID,
 		Accrual: httpOrder.Accrual,
 		// TODO: Probably just add as 'NEW' without even checking accrual in this method
 		// and later check for PROCESSED/INVALID separately?
@@ -112,7 +112,7 @@ func (s *service) GetUserOrders(ctx context.Context) (orders []*Order, err error
 		logger.Log(ctx).Errorf("order: can't get authorized user, %v", err)
 		return
 	}
-	orders, err = s.repo.GetOrders(usr.Id)
+	orders, err = s.repo.GetOrders(usr.ID)
 	if err != nil {
 		logger.Log(ctx).Errorf("order: can't get user orders, %v", err)
 		return

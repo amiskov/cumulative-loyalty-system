@@ -71,7 +71,7 @@ func (s *service) RegUser(ctx context.Context, login, password string) (token st
 		logger.Log(ctx).Errorf("user: can't add user to DB: %v", err)
 		return
 	}
-	user.Id = id
+	user.ID = id
 
 	token, err = s.sm.CreateToken(user)
 	if err != nil {

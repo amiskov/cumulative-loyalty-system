@@ -3,7 +3,7 @@ package sessions
 import "time"
 
 type Session struct {
-	Id         string
-	UserId     string
+	ID         string
+	UserID     string
 	Expiration time.Time
 }

@@ -14,7 +14,7 @@ import (
 
 type (
 	IUserRepo interface {
-		GetById(context.Context, string) (*user.User, error)
+		GetByID(context.Context, string) (*user.User, error)
 	}
 	ISessionManager interface {
 		UserFromToken(string) (*user.User, error)
@@ -50,7 +50,7 @@ func (auth Auth) Middleware(next http.Handler) http.Handler {
 
 		repoCtx, repoCtxCancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer repoCtxCancel()
-		user, err := auth.UserRepo.GetById(repoCtx, userFromToken.Id)
+		user, err := auth.UserRepo.GetByID(repoCtx, userFromToken.ID)
 		if err != nil {
 			logger.Log(r.Context()).Errorf("auth: can't get the user form repo: %v", err)
 			common.WriteMsg(w, "user not found", http.StatusBadRequest)

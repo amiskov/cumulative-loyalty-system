@@ -15,29 +15,29 @@ func NewRepo(db *sql.DB) *repo {
 	}
 }
 
-func (r *repo) GetBalance(userId string) (*Balance, error) {
+func (r *repo) GetBalance(userID string) (*Balance, error) {
 	bal := &Balance{}
-	row := r.db.QueryRow("SELECT balance, withdrawn FROM users where id=$1", userId)
+	row := r.db.QueryRow("SELECT balance, withdrawn FROM users where id=$1", userID)
 	if err := row.Scan(&bal.Current, &bal.Withdrawn); err != nil {
 		return bal, fmt.Errorf("balance/repo: row scan failed: %w", err)
 	}
 	return bal, nil
 }
 
-func (r *repo) WithdrawFromUserBalance(userId, orderId string, sumToWithdraw float32) (float32, error) {
+func (r *repo) WithdrawFromUserBalance(userID, orderId string, sumToWithdraw float32) (float32, error) {
 	// TODO: this should be transaction
 
 	q := `UPDATE users SET balance=balance-$1, withdrawn=withdrawn+$1
 		    WHERE id = $2 RETURNING balance`
 	var newBalance float32
-	err := r.db.QueryRow(q, sumToWithdraw, userId).Scan(&newBalance)
+	err := r.db.QueryRow(q, sumToWithdraw, userID).Scan(&newBalance)
 	if err != nil {
 		return 0, fmt.Errorf("order/repo: failed withdraw from user balance, %w", err)
 	}
 
 	// Add record to withdrawals table
 	_, err = r.db.Exec(`INSERT INTO withdrawals(user_id, order_id, sum) VALUES($1, $2, $3)`,
-		userId, orderId, sumToWithdraw)
+		userID, orderId, sumToWithdraw)
 	if err != nil {
 		return 0, fmt.Errorf("order/repo: failed inserting to `withdrawals` table, %w", err)
 	}
@@ -45,13 +45,16 @@ func (r *repo) WithdrawFromUserBalance(userId, orderId string, sumToWithdraw flo
 	return newBalance, nil
 }
 
-func (r *repo) GetWithdrawals(userId string) ([]*Withdraw, error) {
+func (r *repo) GetWithdrawals(userID string) ([]*Withdraw, error) {
 	q := `SELECT order_id, sum, processed_at FROM withdrawals WHERE user_id=$1 ORDER BY processed_at DESC`
-	rows, err := r.db.Query(q, userId)
+	rows, err := r.db.Query(q, userID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+		_ = rows.Err()
+	}()
 
 	withdrawals := []*Withdraw{}
 	for rows.Next() {

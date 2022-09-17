@@ -34,7 +34,7 @@ func (r *repo) Add(u *User) (string, error) {
 func (r *repo) GetByLoginAndPass(uname string, pass string) (*User, error) {
 	row := r.db.QueryRow("SELECT id, login, password FROM users where login=$1", uname)
 	u := new(User)
-	if err := row.Scan(&u.Id, &u.Login, &u.Password); err != nil {
+	if err := row.Scan(&u.ID, &u.Login, &u.Password); err != nil {
 		return nil, fmt.Errorf("user/repo: row scan failed: %w", err)
 	}
 	// User found by login, now check if passwords are the same
@@ -48,16 +48,16 @@ func (r *repo) GetByLoginAndPass(uname string, pass string) (*User, error) {
 func (r *repo) UserExists(login string) (bool, error) {
 	row := r.db.QueryRow("SELECT id FROM users where login=$1", login)
 	u := new(User)
-	if err := row.Scan(&u.Id); err != nil {
+	if err := row.Scan(&u.ID); err != nil {
 		return false, fmt.Errorf("user/repo.UserExists, could not scan row, user `%s` doesn't exist: %v", login, err)
 	}
 	return true, nil
 }
 
-func (r *repo) GetById(ctx context.Context, uid string) (*User, error) {
+func (r *repo) GetByID(ctx context.Context, uid string) (*User, error) {
 	row := r.db.QueryRowContext(ctx, "SELECT id, login FROM users where id=$1", uid)
 	u := new(User)
-	if err := row.Scan(&u.Id, &u.Login); err != nil {
+	if err := row.Scan(&u.ID, &u.Login); err != nil {
 		return u, fmt.Errorf("user/repo: could not scan row: %w", err)
 	}
 	return u, nil
