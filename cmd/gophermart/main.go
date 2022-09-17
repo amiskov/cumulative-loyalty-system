@@ -6,8 +6,12 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/gorilla/mux"
 	_ "github.com/jackc/pgx/v4/stdlib"
 
@@ -36,6 +40,11 @@ func main() {
 		log.Fatalf("unable to reach PostgreSQL: %v", pingErr)
 	}
 	defer db.Close()
+
+	err := migrateDB(db)
+	if err != nil {
+		log.Fatal("can't migrate db", err)
+	}
 
 	sessionManager := sessions.NewSessionManager(cfg.SecretKey, sessions.NewSessionRepo(db))
 
@@ -83,4 +92,21 @@ func main() {
 	}
 	log.Println("Serving at http://" + cfg.RunAddress + "/")
 	log.Fatalln(server.ListenAndServe())
+}
+
+func migrateDB(db *sql.DB) error {
+	driver, err := postgres.WithInstance(db, &postgres.Config{})
+	if err != nil {
+		return err
+	}
+	migrationsPath, err := filepath.Abs("migrations")
+	if err != nil {
+		return err
+	}
+	m, err := migrate.NewWithDatabaseInstance("file:///"+migrationsPath, "postgres", driver)
+	if err != nil {
+		return err
+	}
+	m.Up() // or m.Step(2) if you want to explicitly set the number of migrations to run
+	return nil
 }
