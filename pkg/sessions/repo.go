@@ -16,19 +16,19 @@ func NewSessionRepo(db *sql.DB) *SessionRepo {
 	}
 }
 
-func (sr *SessionRepo) Add(userId, sessionId string, exp int64) error {
+func (sr *SessionRepo) Add(userID, sessionID string, exp int64) error {
 	expTime := time.Unix(exp, 0)
 	_, err := sr.DB.Exec("INSERT INTO sessions(session_id, user_id, expiration_date) VALUES($1, $2, $3::timestamptz)",
-		sessionId, userId, expTime)
+		sessionID, userID, expTime)
 	if err != nil {
 		return fmt.Errorf("sessions/repo: failed insert into session %w", err)
 	}
 	return nil
 }
 
-func (sr *SessionRepo) GetUserSession(sessionId, userId string) (*Session, error) {
-	row := sr.DB.QueryRow(`SELECT session_id, user_id, expiration_date FROM sessions WHERE session_id = $1 and user_id = $2`,
-		sessionId, userId)
+func (sr *SessionRepo) GetUserSession(sessionID, userID string) (*Session, error) {
+	q := `SELECT session_id, user_id, expiration_date FROM sessions WHERE session_id = $1 and user_id = $2`
+	row := sr.DB.QueryRow(q, sessionID, userID)
 	s := new(Session)
 	err := row.Scan(&s.ID, &s.UserID, &s.Expiration)
 	if err != nil {
@@ -37,16 +37,16 @@ func (sr *SessionRepo) GetUserSession(sessionId, userId string) (*Session, error
 	return s, nil
 }
 
-func (sr *SessionRepo) Destroy(sessionId string) error {
-	_, err := sr.DB.Exec("DELETE FROM sessions WHERE session_id = $1", sessionId)
+func (sr *SessionRepo) Destroy(sessionID string) error {
+	_, err := sr.DB.Exec("DELETE FROM sessions WHERE session_id = $1", sessionID)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (sr *SessionRepo) DestroyAll(userId string) error {
-	_, err := sr.DB.Exec("DELETE FROM sessions WHERE user_id = $1", userId)
+func (sr *SessionRepo) DestroyAll(userID string) error {
+	_, err := sr.DB.Exec("DELETE FROM sessions WHERE user_id = $1", userID)
 	if err != nil {
 		return err
 	}

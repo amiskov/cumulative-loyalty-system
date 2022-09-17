@@ -8,8 +8,6 @@ import (
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/sessions"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/user"
-
-	"github.com/amiskov/cumulative-loyalty-system/pkg/common"
 )
 
 type (
@@ -22,29 +20,29 @@ type (
 	Auth struct {
 		UserRepo       IUserRepo
 		SessionManager ISessionManager
+		noAuthUrls     map[string]struct{}
 	}
 )
 
-func NewAuthMiddleware(sm ISessionManager, ur IUserRepo) *Auth {
+func NewAuthMiddleware(sm ISessionManager, ur IUserRepo, noAuthUrls map[string]struct{}) *Auth {
 	return &Auth{
 		UserRepo:       ur,
 		SessionManager: sm,
+		noAuthUrls:     noAuthUrls,
 	}
 }
 
 func (auth Auth) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-
-		if authHeader == "" {
+		if _, ok := auth.noAuthUrls[r.URL.Path]; ok {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		userFromToken, err := auth.SessionManager.UserFromToken(authHeader)
+		userFromToken, err := auth.SessionManager.UserFromToken(r.Header.Get("Authorization"))
 		if err != nil {
 			logger.Log(r.Context()).Errorf("can't get username from token: %v", err)
-			next.ServeHTTP(w, r)
+			http.Error(w, "authorization required", http.StatusUnauthorized)
 			return
 		}
 
@@ -53,7 +51,7 @@ func (auth Auth) Middleware(next http.Handler) http.Handler {
 		user, err := auth.UserRepo.GetByID(repoCtx, userFromToken.ID)
 		if err != nil {
 			logger.Log(r.Context()).Errorf("auth: can't get the user form repo: %v", err)
-			common.WriteMsg(w, "user not found", http.StatusBadRequest)
+			http.Error(w, "authorization required", http.StatusUnauthorized)
 			return
 		}
 

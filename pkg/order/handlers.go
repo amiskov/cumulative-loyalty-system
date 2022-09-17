@@ -11,11 +11,13 @@ import (
 
 	"github.com/amiskov/cumulative-loyalty-system/pkg/common"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
+	"github.com/amiskov/cumulative-loyalty-system/pkg/sessions"
+	"github.com/amiskov/cumulative-loyalty-system/pkg/user"
 )
 
 type IOrderService interface {
-	GetUserOrders(ctx context.Context) (orders []*Order, err error)
-	AddOrder(ctx context.Context, orderNum string) (*Order, error)
+	GetUserOrders(ctx context.Context, usr *user.User) (orders []*Order, err error)
+	AddOrder(ctx context.Context, usr *user.User, orderNum string) (*Order, error)
 }
 
 type Handler struct {
@@ -30,7 +32,15 @@ func NewOrderHandler(s IOrderService) *Handler {
 
 func (oh Handler) GetOrdersList(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	orders, err := oh.service.GetUserOrders(r.Context())
+
+	usr, err := sessions.GetAuthUser(r.Context())
+	if err != nil {
+		logger.Log(r.Context()).Errorf("order: can't get authorized user, %v", err)
+		common.WriteMsg(w, "authorization required", http.StatusUnauthorized)
+		return
+	}
+
+	orders, err := oh.service.GetUserOrders(r.Context(), usr)
 	if err != nil {
 		common.WriteMsg(w, "user orders not found", http.StatusBadRequest)
 		return
@@ -51,6 +61,13 @@ func (oh Handler) GetOrdersList(w http.ResponseWriter, r *http.Request) {
 // - 500 — внутренняя ошибка сервера.
 func (oh Handler) AddOrder(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
+	usr, err := sessions.GetAuthUser(r.Context())
+	if err != nil {
+		logger.Log(r.Context()).Errorf("order: can't get authorized user, %v", err)
+		common.WriteMsg(w, "authorization required", http.StatusUnauthorized)
+		return
+	}
 
 	// Parse order number
 	body, err := io.ReadAll(r.Body)
@@ -74,7 +91,7 @@ func (oh Handler) AddOrder(w http.ResponseWriter, r *http.Request) {
 	}
 	validOrderNum := strconv.Itoa(orderNum)
 
-	_, err = oh.service.AddOrder(r.Context(), validOrderNum)
+	_, err = oh.service.AddOrder(r.Context(), usr, validOrderNum)
 	if errors.Is(err, errOrderAlreadyAdded) {
 		common.WriteMsg(w, "order is already added", http.StatusOK)
 		return

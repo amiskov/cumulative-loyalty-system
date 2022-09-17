@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
-	"github.com/amiskov/cumulative-loyalty-system/pkg/sessions"
+	"github.com/amiskov/cumulative-loyalty-system/pkg/user"
 )
 
 type IBalanceRepo interface {
@@ -23,14 +23,7 @@ func NewService(r IBalanceRepo) *service {
 	}
 }
 
-func (s *service) Withdrawals(ctx context.Context) ([]*Withdraw, error) {
-	// Get current user
-	usr, err := sessions.GetAuthUser(ctx)
-	if err != nil {
-		logger.Log(ctx).Errorf("balance/handlers: can't get authorized user, %v", err)
-		return nil, err
-	}
-
+func (s *service) Withdrawals(ctx context.Context, usr *user.User) ([]*Withdraw, error) {
 	withdrawals, err := s.repo.GetWithdrawals(usr.ID)
 	if err != nil {
 		logger.Log(ctx).Errorf("balance/handlers: can't get user withdrawals, %v", err)
@@ -40,14 +33,7 @@ func (s *service) Withdrawals(ctx context.Context) ([]*Withdraw, error) {
 	return withdrawals, nil
 }
 
-func (s *service) Withdraw(ctx context.Context, w *Withdraw) (newBalance float32, err error) {
-	// Get current user
-	usr, err := sessions.GetAuthUser(ctx)
-	if err != nil {
-		logger.Log(ctx).Errorf("balance: can't get authorized user, %v", err)
-		return 0, err
-	}
-
+func (s *service) Withdraw(ctx context.Context, usr *user.User, w *Withdraw) (newBalance float32, err error) {
 	// TODO: make checking balance and updating balance in one query
 
 	// Get user balance
@@ -72,19 +58,11 @@ func (s *service) Withdraw(ctx context.Context, w *Withdraw) (newBalance float32
 	return newBalance, nil
 }
 
-func (s *service) GetUserBalance(ctx context.Context) (*Balance, error) {
-	usr, err := sessions.GetAuthUser(ctx)
-	if err != nil {
-		logger.Log(ctx).Errorf("balance/handlers: can't get authorized user, %v", err)
-		return nil, err
-	}
-
-	// Get user balance
+func (s *service) GetUserBalance(ctx context.Context, usr *user.User) (*Balance, error) {
 	bal, err := s.repo.GetBalance(usr.ID)
 	if err != nil {
 		logger.Log(ctx).Errorf("balance/handlers: can't get user balance, %v", err)
 		return nil, err
 	}
-
 	return bal, nil
 }

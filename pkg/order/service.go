@@ -8,7 +8,7 @@ import (
 	"net/http/cookiejar"
 
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
-	"github.com/amiskov/cumulative-loyalty-system/pkg/sessions"
+	"github.com/amiskov/cumulative-loyalty-system/pkg/user"
 	"github.com/go-resty/resty/v2"
 )
 
@@ -42,14 +42,7 @@ var (
 	errOrderExistsForOther = errors.New("order already exists for the other user")
 )
 
-func (s *service) AddOrder(ctx context.Context, orderNum string) (*Order, error) {
-	// Get current user
-	usr, err := sessions.GetAuthUser(ctx)
-	if err != nil {
-		logger.Log(ctx).Errorf("order: can't get authorized user, %v", err)
-		return nil, errOrderAlreadyAdded
-	}
-
+func (s *service) AddOrder(ctx context.Context, usr *user.User, orderNum string) (*Order, error) {
 	o, orderErr := s.repo.GetOrder(orderNum)
 
 	// Order is already added, just sent OK status
@@ -106,12 +99,7 @@ func (s *service) AddOrder(ctx context.Context, orderNum string) (*Order, error)
 	return newOrder, nil
 }
 
-func (s *service) GetUserOrders(ctx context.Context) (orders []*Order, err error) {
-	usr, err := sessions.GetAuthUser(ctx)
-	if err != nil {
-		logger.Log(ctx).Errorf("order: can't get authorized user, %v", err)
-		return
-	}
+func (s *service) GetUserOrders(ctx context.Context, usr *user.User) (orders []*Order, err error) {
 	orders, err = s.repo.GetOrders(usr.ID)
 	if err != nil {
 		logger.Log(ctx).Errorf("order: can't get user orders, %v", err)

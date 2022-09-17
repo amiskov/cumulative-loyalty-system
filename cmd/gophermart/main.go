@@ -74,10 +74,14 @@ func main() {
 	// Balance
 	api.HandleFunc("/user/balance", balanceHandler.GetUserBalance).Methods("GET")
 	api.HandleFunc("/user/balance/withdraw", balanceHandler.Withdraw).Methods("POST")
-	api.HandleFunc("/user/withdrawals", balanceHandler.Withdrawalls).Methods("GET")
+	api.HandleFunc("/user/withdrawals", balanceHandler.Withdrawals).Methods("GET")
 
 	// TODO: move user repo to session manager (it's the service layer for session)
-	auth := middleware.NewAuthMiddleware(sessionManager, userRepo)
+	var noAuthUrls = map[string]struct{}{
+		"/api/user/login":    {},
+		"/api/user/register": {},
+	}
+	auth := middleware.NewAuthMiddleware(sessionManager, userRepo, noAuthUrls)
 	r.Use(auth.Middleware)
 
 	logMiddleware := middleware.NewLoggingMiddleware(logger.Run(cfg.LogLevel))
