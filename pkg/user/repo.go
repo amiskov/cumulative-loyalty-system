@@ -11,17 +11,17 @@ import (
 	"github.com/amiskov/cumulative-loyalty-system/pkg/common"
 )
 
-type UserRepo struct {
+type repo struct {
 	db *sql.DB
 }
 
-func NewUserRepo(db *sql.DB) *UserRepo {
-	return &UserRepo{
+func NewRepo(db *sql.DB) *repo {
+	return &repo{
 		db: db,
 	}
 }
 
-func (r *UserRepo) Add(u *User) (string, error) {
+func (r *repo) Add(u *User) (string, error) {
 	userID := 0
 	err := r.db.QueryRow("INSERT INTO users(login, password) VALUES($1, $2) RETURNING id",
 		u.Login, u.Password).Scan(&userID)
@@ -31,7 +31,7 @@ func (r *UserRepo) Add(u *User) (string, error) {
 	return strconv.Itoa(userID), nil
 }
 
-func (r *UserRepo) GetByLoginAndPass(uname string, pass string) (*User, error) {
+func (r *repo) GetByLoginAndPass(uname string, pass string) (*User, error) {
 	row := r.db.QueryRow("SELECT id, login, password FROM users where login=$1", uname)
 	u := new(User)
 	if err := row.Scan(&u.Id, &u.Login, &u.Password); err != nil {
@@ -45,7 +45,7 @@ func (r *UserRepo) GetByLoginAndPass(uname string, pass string) (*User, error) {
 	return u, nil
 }
 
-func (r *UserRepo) UserExists(login string) (bool, error) {
+func (r *repo) UserExists(login string) (bool, error) {
 	row := r.db.QueryRow("SELECT id FROM users where login=$1", login)
 	u := new(User)
 	if err := row.Scan(&u.Id); err != nil {
@@ -54,7 +54,7 @@ func (r *UserRepo) UserExists(login string) (bool, error) {
 	return true, nil
 }
 
-func (r *UserRepo) GetById(ctx context.Context, uid string) (*User, error) {
+func (r *repo) GetById(ctx context.Context, uid string) (*User, error) {
 	row := r.db.QueryRowContext(ctx, "SELECT id, login FROM users where id=$1", uid)
 	u := new(User)
 	if err := row.Scan(&u.Id, &u.Login); err != nil {

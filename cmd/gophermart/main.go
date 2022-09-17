@@ -5,24 +5,19 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
-	"net/http/cookiejar"
 	"os"
 	"time"
 
-	"github.com/go-resty/resty/v2"
 	"github.com/gorilla/mux"
 	_ "github.com/jackc/pgx/v4/stdlib"
 
 	"github.com/amiskov/cumulative-loyalty-system/pkg/balance"
-	balanceApi "github.com/amiskov/cumulative-loyalty-system/pkg/balance/api"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/config"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/middleware"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/order"
-	orderApi "github.com/amiskov/cumulative-loyalty-system/pkg/order/api"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/sessions"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/user"
-	userApi "github.com/amiskov/cumulative-loyalty-system/pkg/user/api"
 )
 
 func init() {
@@ -42,29 +37,21 @@ func main() {
 	}
 	defer db.Close()
 
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		log.Fatalln("can't create cookie jar")
-	}
+	sessionManager := sessions.NewSessionManager(cfg.SecretKey, sessions.NewSessionRepo(db))
 
-	httpClient := resty.New().
-		SetHostURL(cfg.AccrualSystemAddress).
-		SetCookieJar(jar)
+	userRepo := user.NewRepo(db)
+	orderRepo := order.NewRepo(db)
+	balanceRepo := balance.NewRepo(db)
 
-	sessionRepo := sessions.NewSessionRepo(db)
-	sessionManager := sessions.NewSessionManager(cfg.SecretKey, sessionRepo)
+	orderService := order.NewService(orderRepo, cfg.AccrualSystemAddress)
+	userService := user.NewService(userRepo, sessionManager)
+	balanceService := balance.NewService(balanceRepo)
 
-	usersRepo := user.NewUserRepo(db)
-	userHandler := userApi.NewUserHandler(usersRepo, sessionManager)
-
-	ordersRepo := order.NewOrderRepo(db)
-	orderHandler := orderApi.NewOrderHandler(ordersRepo, httpClient)
-
-	balanceRepo := balance.NewBalanceRepo(db)
-	balanceHandler := balanceApi.NewBalanceHandler(balanceRepo, httpClient)
+	userHandler := user.NewHandler(userService)
+	orderHandler := order.NewOrderHandler(orderService)
+	balanceHandler := balance.NewBalanceHandler(balanceService)
 
 	r := mux.NewRouter()
-
 	api := r.PathPrefix("/api").Subrouter()
 
 	// User
@@ -80,7 +67,8 @@ func main() {
 	api.HandleFunc("/user/balance/withdraw", balanceHandler.Withdraw).Methods("POST")
 	api.HandleFunc("/user/withdrawals", balanceHandler.Withdrawalls).Methods("GET")
 
-	auth := middleware.NewAuthMiddleware(sessionManager, usersRepo)
+	// TODO: move user repo to session manager (it's the service layer for session)
+	auth := middleware.NewAuthMiddleware(sessionManager, userRepo)
 	r.Use(auth.Middleware)
 
 	logMiddleware := middleware.NewLoggingMiddleware(logger.Run(cfg.LogLevel))

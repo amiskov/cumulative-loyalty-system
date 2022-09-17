@@ -5,17 +5,17 @@ import (
 	"fmt"
 )
 
-type Repo struct {
+type repo struct {
 	db *sql.DB
 }
 
-func NewBalanceRepo(db *sql.DB) *Repo {
-	return &Repo{
+func NewRepo(db *sql.DB) *repo {
+	return &repo{
 		db: db,
 	}
 }
 
-func (r *Repo) GetBalance(userId string) (*Balance, error) {
+func (r *repo) GetBalance(userId string) (*Balance, error) {
 	bal := &Balance{}
 	row := r.db.QueryRow("SELECT balance, withdrawn FROM users where id=$1", userId)
 	if err := row.Scan(&bal.Current, &bal.Withdrawn); err != nil {
@@ -24,7 +24,7 @@ func (r *Repo) GetBalance(userId string) (*Balance, error) {
 	return bal, nil
 }
 
-func (r *Repo) WithdrawFromUserBalance(userId, orderId string, sumToWithdraw float32) (float32, error) {
+func (r *repo) WithdrawFromUserBalance(userId, orderId string, sumToWithdraw float32) (float32, error) {
 	// TODO: this should be transaction
 
 	q := `UPDATE users SET balance=balance-$1, withdrawn=withdrawn+$1
@@ -45,7 +45,7 @@ func (r *Repo) WithdrawFromUserBalance(userId, orderId string, sumToWithdraw flo
 	return newBalance, nil
 }
 
-func (r *Repo) GetWithdrawals(userId string) ([]*Withdraw, error) {
+func (r *repo) GetWithdrawals(userId string) ([]*Withdraw, error) {
 	q := `SELECT order_id, sum, processed_at FROM withdrawals WHERE user_id=$1 ORDER BY processed_at DESC`
 	rows, err := r.db.Query(q, userId)
 	if err != nil {
