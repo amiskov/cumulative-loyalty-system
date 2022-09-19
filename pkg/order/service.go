@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http/cookiejar"
 	"time"
@@ -25,18 +26,17 @@ type service struct {
 	client *resty.Client
 }
 
-func NewService(r IOrderRepo, accrualAddr string) *service {
+func NewService(r IOrderRepo, accrualAddr string) (*service, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
-		// TODO: Is it fine to use `log.Fatal` here?
-		log.Fatalln("can't create cookie jar")
+		return nil, fmt.Errorf("can't create cookie jar, %w", err)
 	}
 	httpClient := resty.New().SetBaseURL(accrualAddr).SetCookieJar(jar)
 
 	return &service{
 		repo:   r,
 		client: httpClient,
-	}
+	}, nil
 }
 
 var (

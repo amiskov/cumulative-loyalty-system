@@ -41,19 +41,21 @@ func main() {
 	}
 	defer db.Close()
 
-	err := migrateDB(db)
-	if err != nil {
+	if err := migrateDB(db); err != nil {
 		log.Fatal("can't migrate db", err)
 	}
-
-	sessionManager := session.NewSessionManager(cfg.SecretKey, session.NewSessionRepo(db))
 
 	userRepo := user.NewRepo(db)
 	orderRepo := order.NewRepo(db)
 	balanceRepo := balance.NewRepo(db)
+	sessionRepo := session.NewSessionRepo(db)
 
-	orderService := order.NewService(orderRepo, cfg.AccrualSystemAddress)
-	userService := user.NewService(userRepo, sessionManager)
+	sessionService := session.NewSessionService(cfg.SecretKey, sessionRepo)
+	orderService, err := order.NewService(orderRepo, cfg.AccrualSystemAddress)
+	if err != nil {
+		log.Fatal("failed init order service", err)
+	}
+	userService := user.NewService(userRepo, sessionService)
 	balanceService := balance.NewService(balanceRepo)
 
 	userHandler := user.NewHandler(userService)
@@ -80,7 +82,7 @@ func main() {
 		"/api/user/login":    {},
 		"/api/user/register": {},
 	}
-	auth := middleware.NewAuthMiddleware(sessionManager, userRepo, noAuthUrls)
+	auth := middleware.NewAuthMiddleware(sessionService, userRepo, noAuthUrls)
 	r.Use(auth.Middleware)
 
 	logMiddleware := middleware.NewLoggingMiddleware(logger.Run(cfg.LogLevel))

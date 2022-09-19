@@ -32,7 +32,7 @@ const SessionKey sessionKey = "authenticatedUser"
 
 var ErrNoAuth = errors.New("sessions: no session found")
 
-func NewSessionManager(secret string, sr *repo) *manager {
+func NewSessionService(secret string, sr *repo) *manager {
 	return &manager{
 		secret: []byte(secret),
 		repo:   sr,
