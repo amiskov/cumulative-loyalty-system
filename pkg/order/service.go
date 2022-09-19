@@ -77,15 +77,41 @@ func (s *service) AddOrder(ctx context.Context, orderNum string) (*Order, error)
 	}
 
 	// TODO: add limitation (if tried N times with no success then stop)
-	go func(ctx context.Context, orderNum string) {
+	go func() {
 		// Every 3 seconds check and accrual system and update the order status.
 		// If order status is `INVALID` or `PROCESSED`, then stop the ticker.
 		ticker := time.NewTicker(3 * time.Second)
+
+		accrualCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		// TODO: This should not be a ticker, this should run N times until the status is INVALID or PROCESSED.
+		// Create channel `processed`
+		// change channel status if order status is INVALID or PROCESSED or timeout exceeded
+		// OR just create context with TIMEOUT and with cancel and use it instead.
 		for range ticker.C {
-			// TODO: use either channel or cancel via context
-			s.updateOrderStatus(ctx, ticker, orderNum)
+			orderAccrual, err := s.accrualSystem.GetOrderAccrual(ctx, orderNum)
+			if err != nil {
+				logger.Log(ctx).Errorf("order: failed getting order accrual, %v", err)
+				return
+			}
+
+			if err := s.repo.UpdateOrderStatus(usr.ID, orderNum, orderAccrual.Status, orderAccrual.Accrual); err != nil {
+				logger.Log(ctx).Errorf("order: failed updating order, %w", err)
+				return
+			}
+
+			if orderAccrual.Status == INVALID || orderAccrual.Status == PROCESSED {
+				cancel()
+				return
+			}
 		}
-	}(ctx, orderNum)
+
+		go func() {
+			<-accrualCtx.Done()
+			ticker.Stop()
+		}()
+	}()
 
 	return newOrder, nil
 }
@@ -103,28 +129,4 @@ func (s *service) GetUserOrders(ctx context.Context) (orders []*Order, err error
 		return
 	}
 	return
-}
-
-func (s *service) updateOrderStatus(ctx context.Context, ticker *time.Ticker, orderNum string) {
-	usr, err := session.GetAuthUser(ctx)
-	if err != nil {
-		logger.Log(ctx).Errorf("order: can't get authorized user, %v", err)
-		return
-	}
-
-	orderAccrual, err := s.accrualSystem.GetOrderAccrual(ctx, orderNum)
-	if err != nil {
-		logger.Log(ctx).Errorf("order: failed getting order accrual, %v", err)
-		return
-	}
-
-	if err := s.repo.UpdateOrderStatus(usr.ID, orderNum, orderAccrual.Status, orderAccrual.Accrual); err != nil {
-		logger.Log(ctx).Errorf("order: failed updating order, %w", err)
-		return
-	}
-
-	if orderAccrual.Status == INVALID || orderAccrual.Status == PROCESSED {
-		ticker.Stop()
-		return
-	}
 }
