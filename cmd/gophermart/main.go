@@ -71,6 +71,7 @@ func main() {
 	// User
 	api.HandleFunc("/user/register", userHandler.Register).Methods("POST")
 	api.HandleFunc("/user/login", userHandler.LogIn).Methods("POST")
+	api.HandleFunc("/user/logout", userHandler.LogOut).Methods("POST")
 
 	// Order
 	api.HandleFunc("/user/orders", orderHandler.AddOrder).Methods("POST")

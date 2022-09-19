@@ -17,11 +17,12 @@ type IRepo interface {
 
 type ISessionService interface {
 	CreateToken(*User) (string, error)
+	DestroySession(context.Context) error
 }
 
 type service struct {
 	repo IRepo
-	sm   ISessionService
+	sess ISessionService
 }
 
 var (
@@ -29,11 +30,15 @@ var (
 	errUserNotFound      = errors.New("user not found")
 )
 
-func NewService(r IRepo, sm ISessionService) *service {
+func NewService(r IRepo, sess ISessionService) *service {
 	return &service{
 		repo: r,
-		sm:   sm,
+		sess: sess,
 	}
+}
+
+func (s *service) LogOutUser(ctx context.Context) error {
+	return s.sess.DestroySession(ctx)
 }
 
 func (s *service) LoginUser(ctx context.Context, login, password string) (token string, err error) {
@@ -43,7 +48,7 @@ func (s *service) LoginUser(ctx context.Context, login, password string) (token 
 		return ``, fmt.Errorf("can't get the user by login `%s`, %w", login, errUserNotFound)
 	}
 
-	token, err = s.sm.CreateToken(usr)
+	token, err = s.sess.CreateToken(usr)
 	if err != nil {
 		logger.Log(ctx).Errorf("can't create JWT token from user: %v", err)
 		return
@@ -73,7 +78,7 @@ func (s *service) RegUser(ctx context.Context, login, password string) (token st
 	}
 	user.ID = id
 
-	token, err = s.sm.CreateToken(user)
+	token, err = s.sess.CreateToken(user)
 	if err != nil {
 		logger.Log(context.Background()).Errorf("can't create JWT token from user: %v", err)
 		return ``, err

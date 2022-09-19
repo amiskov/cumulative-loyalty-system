@@ -15,6 +15,7 @@ import (
 type iService interface {
 	RegUser(ctx context.Context, login, pass string) (token string, err error)
 	LoginUser(ctx context.Context, login, password string) (token string, err error)
+	LogOutUser(ctx context.Context) error
 }
 
 type Handler struct {
@@ -77,8 +78,13 @@ func (uh Handler) LogIn(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (uh *Handler) LogOut(w http.ResponseWriter, user *User) {
-	// TODO
+func (uh Handler) LogOut(w http.ResponseWriter, r *http.Request) {
+	err := uh.service.LogOutUser(r.Context())
+	if err != nil {
+		common.WriteMsg(w, "user logout failed", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 func userFromRequest(reqBody io.ReadCloser) (login, password string, err error) {

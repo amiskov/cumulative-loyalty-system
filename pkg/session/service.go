@@ -14,19 +14,17 @@ import (
 	"github.com/amiskov/cumulative-loyalty-system/pkg/user"
 )
 
-type (
-	sessionKey string
+type sessionKey string
 
-	service struct {
-		secret []byte
-		repo   *repo
-	}
+type service struct {
+	secret []byte
+	repo   *repo
+}
 
-	jwtClaims struct {
-		User user.User `json:"user"`
-		jwt.StandardClaims
-	}
-)
+type jwtClaims struct {
+	User user.User `json:"user"`
+	jwt.StandardClaims
+}
 
 const SessionKey sessionKey = "authenticatedUser"
 
@@ -107,17 +105,17 @@ func (s *service) UserFromToken(authHeader string) (*user.User, error) {
 	return &claims.User, nil
 }
 
-func (s *service) DestroySession(sessionID string) error {
+func (s *service) DestroySession(ctx context.Context) error {
+	sessionID, err := GetAuthUserSessionID(ctx)
+	if err != nil {
+		return err
+	}
 	return s.repo.Destroy(sessionID)
 }
 
 // Goes through all user sessions and removes expired ones.
 func (s *service) CleanupUserSessions(userID string) error {
-	err := s.repo.DestroyAll(userID)
-	if err != nil {
-		return fmt.Errorf("session: failed destroying user sessions, %w", err)
-	}
-	return nil
+	return s.repo.DestroyAll(userID)
 }
 
 func (s *service) Check(userID, sessionID string) (bool, error) {
@@ -172,17 +170,17 @@ func (s *service) CreateToken(user *user.User) (string, error) {
 }
 
 func GetAuthUserID(ctx context.Context) (string, error) {
-	s, ok := ctx.Value(SessionKey).(*Session)
-	if !ok || s == nil {
+	sess, ok := ctx.Value(SessionKey).(*Session)
+	if !ok || sess == nil {
 		return ``, ErrNoAuth
 	}
-	return s.UserID, nil
+	return sess.UserID, nil
 }
 
 func GetAuthUserSessionID(ctx context.Context) (string, error) {
-	s, ok := ctx.Value(SessionKey).(*Session)
-	if !ok || s == nil {
+	sess, ok := ctx.Value(SessionKey).(*Session)
+	if !ok || sess == nil {
 		return ``, ErrNoAuth
 	}
-	return s.ID, nil
+	return sess.ID, nil
 }
