@@ -15,13 +15,13 @@ type IRepo interface {
 	Add(*User) (string, error)
 }
 
-type ISessionManager interface {
+type ISessionService interface {
 	CreateToken(*User) (string, error)
 }
 
 type service struct {
 	repo IRepo
-	sm   ISessionManager
+	sm   ISessionService
 }
 
 var (
@@ -29,7 +29,7 @@ var (
 	errUserNotFound      = errors.New("user not found")
 )
 
-func NewService(r IRepo, sm ISessionManager) *service {
+func NewService(r IRepo, sm ISessionService) *service {
 	return &service{
 		repo: r,
 		sm:   sm,

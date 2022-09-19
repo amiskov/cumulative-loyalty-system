@@ -17,7 +17,7 @@ import (
 type (
 	sessionKey string
 
-	manager struct {
+	service struct {
 		secret []byte
 		repo   *repo
 	}
@@ -30,26 +30,62 @@ type (
 
 const SessionKey sessionKey = "authenticatedUser"
 
-var ErrNoAuth = errors.New("sessions: no session found")
+var ErrNoAuth = errors.New("session: no session found")
 
-func NewSessionService(secret string, sr *repo) *manager {
-	return &manager{
+func NewSessionService(secret string, sr *repo) *service {
+	return &service{
 		secret: []byte(secret),
 		repo:   sr,
 	}
 }
 
-// Returns logged in user if the user from JWT token is valid
-// and the session is valid.
-func (sm *manager) UserFromToken(authHeader string) (*user.User, error) {
+func (s *service) SessionFromToken(authHeader string) (*Session, error) {
 	if authHeader == "" {
-		return nil, errors.New("sessions: auth header not found")
+		return nil, errors.New("session: auth header not found")
 	}
 
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	token, err := jwt.ParseWithClaims(tokenString, &jwtClaims{},
 		func(token *jwt.Token) (interface{}, error) {
-			return sm.secret, nil
+			return s.secret, nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	claims, ok := token.Claims.(*jwtClaims)
+	log.Printf("Claims! %#v\n", claims)
+	if !ok {
+		return nil, errors.New("session: can't cast token to claim")
+	}
+	if !token.Valid {
+		return nil, errors.New("session: token is not valid")
+	}
+
+	_, err = s.Check(claims.User.ID, claims.Id)
+	if err != nil {
+		return nil, fmt.Errorf("session: session is not valid: %w", err)
+	}
+
+	session := &Session{
+		ID:     claims.Id,
+		UserID: claims.User.ID,
+	}
+
+	return session, nil
+}
+
+// Returns logged in user if the user from JWT token is valid
+// and the session is valid.
+func (s *service) UserFromToken(authHeader string) (*user.User, error) {
+	if authHeader == "" {
+		return nil, errors.New("session: auth header not found")
+	}
+
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	token, err := jwt.ParseWithClaims(tokenString, &jwtClaims{},
+		func(token *jwt.Token) (interface{}, error) {
+			return s.secret, nil
 		})
 	if err != nil {
 		return nil, err
@@ -57,49 +93,53 @@ func (sm *manager) UserFromToken(authHeader string) (*user.User, error) {
 
 	claims, ok := token.Claims.(*jwtClaims)
 	if !ok {
-		return nil, errors.New("sessions: can't cast token to claim")
+		return nil, errors.New("session: can't cast token to claim")
 	}
 	if !token.Valid {
-		return nil, errors.New("sessions: token is not valid")
+		return nil, errors.New("session: token is not valid")
 	}
 
-	_, err = sm.Check(claims.User.ID, claims.Id)
+	_, err = s.Check(claims.User.ID, claims.Id)
 	if err != nil {
-		return nil, fmt.Errorf("sesssion/manager: session is not valid: %w", err)
+		return nil, fmt.Errorf("session: session is not valid: %w", err)
 	}
 
 	return &claims.User, nil
 }
 
+func (s *service) DestroySession(sessionID string) error {
+	return s.repo.Destroy(sessionID)
+}
+
 // Goes through all user sessions and removes expired ones.
-func (sm *manager) CleanupUserSessions(userID string) error {
-	err := sm.repo.DestroyAll(userID)
+func (s *service) CleanupUserSessions(userID string) error {
+	err := s.repo.DestroyAll(userID)
 	if err != nil {
-		return fmt.Errorf("sessions/manager: failed destroying user sessions, %w", err)
+		return fmt.Errorf("session: failed destroying user sessions, %w", err)
 	}
 	return nil
 }
 
-func (sm *manager) Check(userID, sessionID string) (bool, error) {
-	session, err := sm.repo.GetUserSession(sessionID, userID)
+func (s *service) Check(userID, sessionID string) (bool, error) {
+	session, err := s.repo.GetUserSession(sessionID, userID)
 	if err != nil {
-		return false, fmt.Errorf("session/manager: failed get user session, %w", err)
+		return false, fmt.Errorf("session: failed get user session, %w", err)
 	}
 
 	// Check user session for expiration
 	expiredTS := session.Expiration.Unix()
 	nowTS := time.Now().Unix()
 	if nowTS > expiredTS {
-		return false, errors.New("session has beed expired")
+		return false, errors.New("session: session has beed expired")
 	}
 
 	// Prolongate session expiration time if it expires in less than 24 hours
 	// because we don't want to kick off the active user.
 	if expiredTS-nowTS < int64((24 * time.Hour).Seconds()) {
 		newExpDate := time.Now().Add(90 * 24 * time.Hour).Unix()
-		err := sm.repo.Add(userID, sessionID, newExpDate)
+		err := s.repo.Add(userID, sessionID, newExpDate)
 		if err != nil {
-			log.Println("session/manager: can't save session to repo", err)
+			log.Println("session: can't save session to repo", err)
 			return false, err
 		}
 	}
@@ -107,7 +147,7 @@ func (sm *manager) Check(userID, sessionID string) (bool, error) {
 	return true, nil
 }
 
-func (sm *manager) CreateToken(user *user.User) (string, error) {
+func (s *service) CreateToken(user *user.User) (string, error) {
 	sessionID := common.RandStringRunes(10)
 	data := jwtClaims{
 		User: *user,
@@ -118,23 +158,31 @@ func (sm *manager) CreateToken(user *user.User) (string, error) {
 		},
 	}
 
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, data).SignedString(sm.secret)
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, data).SignedString(s.secret)
 	if err != nil {
 		return ``, err
 	}
 
-	err = sm.repo.Add(user.ID, sessionID, data.ExpiresAt)
+	err = s.repo.Add(user.ID, sessionID, data.ExpiresAt)
 	if err != nil {
-		return ``, fmt.Errorf("session/manager: can't add session to repo, %w", err)
+		return ``, fmt.Errorf("session: can't add session to repo, %w", err)
 	}
 
 	return token, nil
 }
 
-func GetAuthUser(ctx context.Context) (*user.User, error) {
-	user, ok := ctx.Value(SessionKey).(*user.User)
-	if !ok || user == nil {
-		return nil, ErrNoAuth
+func GetAuthUserID(ctx context.Context) (string, error) {
+	s, ok := ctx.Value(SessionKey).(*Session)
+	if !ok || s == nil {
+		return ``, ErrNoAuth
 	}
-	return user, nil
+	return s.UserID, nil
+}
+
+func GetAuthUserSessionID(ctx context.Context) (string, error) {
+	s, ok := ctx.Value(SessionKey).(*Session)
+	if !ok || s == nil {
+		return ``, ErrNoAuth
+	}
+	return s.ID, nil
 }

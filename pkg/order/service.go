@@ -41,7 +41,7 @@ var (
 )
 
 func (s *service) AddOrder(ctx context.Context, orderNum string) (*Order, error) {
-	usr, err := session.GetAuthUser(ctx)
+	userID, err := session.GetAuthUserID(ctx)
 	if err != nil {
 		logger.Log(ctx).Errorf("order: can't get authorized user, %v", err)
 		return nil, err
@@ -49,15 +49,17 @@ func (s *service) AddOrder(ctx context.Context, orderNum string) (*Order, error)
 
 	ord, orderErr := s.repo.GetOrder(orderNum)
 
+	// TODO: checking order/errors below look too complex
+
 	// Order is already added, just sent OK status
-	if ord != nil && orderErr == nil && ord.UserID == usr.ID {
+	if ord != nil && orderErr == nil && ord.UserID == userID {
 		return nil, errOrderAlreadyAdded
 	}
 
 	// Order exists but for the other user
-	if ord != nil && orderErr == nil && ord.UserID != usr.ID {
+	if ord != nil && orderErr == nil && ord.UserID != userID {
 		logger.Log(ctx).Errorf("order: user `%s` tries to get the order of user `%s`, %v",
-			usr.ID, ord.UserID, orderErr)
+			userID, ord.UserID, orderErr)
 		return nil, errOrderExistsForOther
 	}
 
@@ -69,7 +71,7 @@ func (s *service) AddOrder(ctx context.Context, orderNum string) (*Order, error)
 
 	newOrder := &Order{
 		Number:  orderNum,
-		UserID:  usr.ID,
+		UserID:  userID,
 		Accrual: 0,
 		Status:  NEW,
 	}
@@ -78,7 +80,7 @@ func (s *service) AddOrder(ctx context.Context, orderNum string) (*Order, error)
 		return nil, err
 	}
 
-	go s.updateOrderStatus(ctx, usr.ID, orderNum)
+	go s.updateOrderStatus(ctx, userID, orderNum)
 
 	return newOrder, nil
 }
@@ -121,13 +123,13 @@ func (s *service) updateOrderStatus(ctx context.Context, userID, orderNum string
 }
 
 func (s *service) GetUserOrders(ctx context.Context) (orders []*Order, err error) {
-	usr, err := session.GetAuthUser(ctx)
+	userID, err := session.GetAuthUserID(ctx)
 	if err != nil {
 		logger.Log(ctx).Errorf("order: can't get authorized user, %v", err)
 		return
 	}
 
-	orders, err = s.repo.GetOrders(usr.ID)
+	orders, err = s.repo.GetOrders(userID)
 	if err != nil {
 		logger.Log(ctx).Errorf("order: can't get user orders, %v", err)
 		return
