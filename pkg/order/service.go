@@ -2,15 +2,12 @@ package order
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"net/http/cookiejar"
 	"time"
 
+	"github.com/amiskov/cumulative-loyalty-system/pkg/accrual"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/session"
-	"github.com/go-resty/resty/v2"
 )
 
 type IOrderRepo interface {
@@ -20,29 +17,20 @@ type IOrderRepo interface {
 	UpdateOrderStatus(userID, orderID, newStatus string, accrual float32) error
 }
 
-type IAccrual interface {
-	UpdateOrderStatus(orderNum string) error
+type IAccrualSystem interface {
+	GetOrderAccrual(ctx context.Context, orderNum string) (*accrual.OrderAccrual, error)
 }
 
 type service struct {
-	repo    IOrderRepo
-	client  *resty.Client
-	accrual IAccrual
+	repo          IOrderRepo
+	accrualSystem IAccrualSystem
 }
 
-// TODO: Separate accrual interface to be independant from http
-
-func NewService(r IOrderRepo, accrualAddr string) (*service, error) {
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return nil, fmt.Errorf("can't create cookie jar, %w", err)
-	}
-	httpClient := resty.New().SetBaseURL(accrualAddr).SetCookieJar(jar)
-
+func NewService(r IOrderRepo, accSys IAccrualSystem) *service {
 	return &service{
-		repo:   r,
-		client: httpClient,
-	}, nil
+		repo:          r,
+		accrualSystem: accSys,
+	}
 }
 
 var (
@@ -124,30 +112,18 @@ func (s *service) updateOrderStatus(ctx context.Context, ticker *time.Ticker, or
 		return
 	}
 
-	resp, err := s.client.R().Get("/api/orders/" + orderNum)
+	orderAccrual, err := s.accrualSystem.GetOrderAccrual(ctx, orderNum)
 	if err != nil {
-		logger.Log(ctx).Errorf("order: failed sending request to accrual, %v", err)
+		logger.Log(ctx).Errorf("order: failed getting order accrual, %v", err)
 		return
 	}
 
-	// Accrual response format: `{"order":"2060100522","status":"PROCESSED","accrual":729.98}`
-	httpOrder := struct {
-		Order   string
-		Status  string
-		Accrual float32
-	}{}
-	jsonErr := json.Unmarshal(resp.Body(), &httpOrder)
-	if jsonErr != nil {
-		logger.Log(ctx).Errorf("order: failed parsing response from accrual, %w", jsonErr)
-		return
-	}
-
-	if err := s.repo.UpdateOrderStatus(usr.ID, orderNum, httpOrder.Status, httpOrder.Accrual); err != nil {
+	if err := s.repo.UpdateOrderStatus(usr.ID, orderNum, orderAccrual.Status, orderAccrual.Accrual); err != nil {
 		logger.Log(ctx).Errorf("order: failed updating order, %w", err)
 		return
 	}
 
-	if httpOrder.Status == INVALID || httpOrder.Status == PROCESSED {
+	if orderAccrual.Status == INVALID || orderAccrual.Status == PROCESSED {
 		ticker.Stop()
 		return
 	}

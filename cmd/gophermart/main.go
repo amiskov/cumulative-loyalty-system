@@ -15,6 +15,7 @@ import (
 	"github.com/gorilla/mux"
 	_ "github.com/jackc/pgx/v4/stdlib"
 
+	"github.com/amiskov/cumulative-loyalty-system/pkg/accrual"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/balance"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/config"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
@@ -50,11 +51,13 @@ func main() {
 	balanceRepo := balance.NewRepo(db)
 	sessionRepo := session.NewSessionRepo(db)
 
-	sessionService := session.NewSessionService(cfg.SecretKey, sessionRepo)
-	orderService, err := order.NewService(orderRepo, cfg.AccrualSystemAddress)
+	accrualSystem, err := accrual.NewAccrual(3*time.Second, cfg.AccrualSystemAddress)
 	if err != nil {
-		log.Fatal("failed init order service", err)
+		log.Fatal("failed init accrual system", err)
 	}
+
+	sessionService := session.NewSessionService(cfg.SecretKey, sessionRepo)
+	orderService := order.NewService(orderRepo, accrualSystem)
 	userService := user.NewService(userRepo, sessionService)
 	balanceService := balance.NewService(balanceRepo)
 
