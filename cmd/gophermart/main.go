@@ -76,7 +76,6 @@ func main() {
 	api.HandleFunc("/user/balance/withdraw", balanceHandler.Withdraw).Methods("POST")
 	api.HandleFunc("/user/withdrawals", balanceHandler.Withdrawals).Methods("GET")
 
-	// TODO: move user repo to session manager (it's the service layer for session)
 	noAuthUrls := map[string]struct{}{
 		"/api/user/login":    {},
 		"/api/user/register": {},
@@ -111,6 +110,6 @@ func migrateDB(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	m.Up() // or m.Step(2) if you want to explicitly set the number of migrations to run
+	m.Up()
 	return nil
 }

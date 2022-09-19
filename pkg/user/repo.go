@@ -49,7 +49,7 @@ func (r *repo) UserExists(login string) (bool, error) {
 	row := r.db.QueryRow("SELECT id FROM users where login=$1", login)
 	u := new(User)
 	if err := row.Scan(&u.ID); err != nil {
-		return false, fmt.Errorf("user/repo.UserExists, could not scan row, user `%s` doesn't exist: %v", login, err)
+		return false, fmt.Errorf("user/repo.UserExists, could not scan row, user `%s` doesn't exist: %w", login, err)
 	}
 	return true, nil
 }

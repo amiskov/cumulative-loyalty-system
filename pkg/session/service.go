@@ -49,7 +49,7 @@ func (sm *manager) UserFromToken(authHeader string) (*user.User, error) {
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	token, err := jwt.ParseWithClaims(tokenString, &jwtClaims{},
 		func(token *jwt.Token) (interface{}, error) {
-			return []byte(sm.secret), nil
+			return sm.secret, nil
 		})
 	if err != nil {
 		return nil, err

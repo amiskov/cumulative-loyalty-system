@@ -70,7 +70,6 @@ func (bh *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: user pgx extension for numeric type: https://github.com/jackc/pgx/wiki/Numeric-and-decimal-support
 	msg := fmt.Sprintf(`successfully withdrawn %f from %s; current balance: %f`, withdraw.Sum, withdraw.Order, newBalance)
 	common.WriteMsg(w, msg, http.StatusOK)
 }
