@@ -20,7 +20,7 @@ import (
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/middleware"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/order"
-	"github.com/amiskov/cumulative-loyalty-system/pkg/sessions"
+	"github.com/amiskov/cumulative-loyalty-system/pkg/session"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/user"
 )
 
@@ -46,7 +46,7 @@ func main() {
 		log.Fatal("can't migrate db", err)
 	}
 
-	sessionManager := sessions.NewSessionManager(cfg.SecretKey, sessions.NewSessionRepo(db))
+	sessionManager := session.NewSessionManager(cfg.SecretKey, session.NewSessionRepo(db))
 
 	userRepo := user.NewRepo(db)
 	orderRepo := order.NewRepo(db)
@@ -77,7 +77,7 @@ func main() {
 	api.HandleFunc("/user/withdrawals", balanceHandler.Withdrawals).Methods("GET")
 
 	// TODO: move user repo to session manager (it's the service layer for session)
-	var noAuthUrls = map[string]struct{}{
+	noAuthUrls := map[string]struct{}{
 		"/api/user/login":    {},
 		"/api/user/register": {},
 	}

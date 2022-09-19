@@ -1,4 +1,4 @@
-package sessions
+package session
 
 import (
 	"context"
@@ -17,9 +17,9 @@ import (
 type (
 	sessionKey string
 
-	SessionManager struct {
+	manager struct {
 		secret []byte
-		repo   *SessionRepo
+		repo   *repo
 	}
 
 	jwtClaims struct {
@@ -32,8 +32,8 @@ const SessionKey sessionKey = "authenticatedUser"
 
 var ErrNoAuth = errors.New("sessions: no session found")
 
-func NewSessionManager(secret string, sr *SessionRepo) *SessionManager {
-	return &SessionManager{
+func NewSessionManager(secret string, sr *repo) *manager {
+	return &manager{
 		secret: []byte(secret),
 		repo:   sr,
 	}
@@ -41,7 +41,7 @@ func NewSessionManager(secret string, sr *SessionRepo) *SessionManager {
 
 // Returns logged in user if the user from JWT token is valid
 // and the session is valid.
-func (sm *SessionManager) UserFromToken(authHeader string) (*user.User, error) {
+func (sm *manager) UserFromToken(authHeader string) (*user.User, error) {
 	if authHeader == "" {
 		return nil, errors.New("sessions: auth header not found")
 	}
@@ -72,7 +72,7 @@ func (sm *SessionManager) UserFromToken(authHeader string) (*user.User, error) {
 }
 
 // Goes through all user sessions and removes expired ones.
-func (sm *SessionManager) CleanupUserSessions(userID string) error {
+func (sm *manager) CleanupUserSessions(userID string) error {
 	err := sm.repo.DestroyAll(userID)
 	if err != nil {
 		return fmt.Errorf("sessions/manager: failed destroying user sessions, %w", err)
@@ -80,7 +80,7 @@ func (sm *SessionManager) CleanupUserSessions(userID string) error {
 	return nil
 }
 
-func (sm *SessionManager) Check(userID, sessionID string) (bool, error) {
+func (sm *manager) Check(userID, sessionID string) (bool, error) {
 	session, err := sm.repo.GetUserSession(sessionID, userID)
 	if err != nil {
 		return false, fmt.Errorf("session/manager: failed get user session, %w", err)
@@ -107,7 +107,7 @@ func (sm *SessionManager) Check(userID, sessionID string) (bool, error) {
 	return true, nil
 }
 
-func (sm *SessionManager) CreateToken(user *user.User) (string, error) {
+func (sm *manager) CreateToken(user *user.User) (string, error) {
 	sessionID := common.RandStringRunes(10)
 	data := jwtClaims{
 		User: *user,

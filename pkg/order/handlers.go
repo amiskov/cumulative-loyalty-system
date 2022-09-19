@@ -11,7 +11,7 @@ import (
 
 	"github.com/amiskov/cumulative-loyalty-system/pkg/common"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
-	"github.com/amiskov/cumulative-loyalty-system/pkg/sessions"
+	"github.com/amiskov/cumulative-loyalty-system/pkg/session"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/user"
 )
 
@@ -33,7 +33,7 @@ func NewOrderHandler(s IOrderService) *Handler {
 func (oh Handler) GetOrdersList(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	usr, err := sessions.GetAuthUser(r.Context())
+	usr, err := session.GetAuthUser(r.Context())
 	if err != nil {
 		logger.Log(r.Context()).Errorf("order: can't get authorized user, %v", err)
 		common.WriteMsg(w, "authorization required", http.StatusUnauthorized)
@@ -62,7 +62,7 @@ func (oh Handler) GetOrdersList(w http.ResponseWriter, r *http.Request) {
 func (oh Handler) AddOrder(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	usr, err := sessions.GetAuthUser(r.Context())
+	usr, err := session.GetAuthUser(r.Context())
 	if err != nil {
 		logger.Log(r.Context()).Errorf("order: can't get authorized user, %v", err)
 		common.WriteMsg(w, "authorization required", http.StatusUnauthorized)

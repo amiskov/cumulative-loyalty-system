@@ -1,4 +1,4 @@
-package sessions
+package session
 
 import (
 	"database/sql"
@@ -6,17 +6,17 @@ import (
 	"time"
 )
 
-type SessionRepo struct {
+type repo struct {
 	DB *sql.DB
 }
 
-func NewSessionRepo(db *sql.DB) *SessionRepo {
-	return &SessionRepo{
+func NewSessionRepo(db *sql.DB) *repo {
+	return &repo{
 		DB: db,
 	}
 }
 
-func (sr *SessionRepo) Add(userID, sessionID string, exp int64) error {
+func (sr *repo) Add(userID, sessionID string, exp int64) error {
 	expTime := time.Unix(exp, 0)
 	_, err := sr.DB.Exec("INSERT INTO sessions(session_id, user_id, expiration_date) VALUES($1, $2, $3::timestamptz)",
 		sessionID, userID, expTime)
@@ -26,7 +26,7 @@ func (sr *SessionRepo) Add(userID, sessionID string, exp int64) error {
 	return nil
 }
 
-func (sr *SessionRepo) GetUserSession(sessionID, userID string) (*Session, error) {
+func (sr *repo) GetUserSession(sessionID, userID string) (*Session, error) {
 	q := `SELECT session_id, user_id, expiration_date FROM sessions WHERE session_id = $1 and user_id = $2`
 	row := sr.DB.QueryRow(q, sessionID, userID)
 	s := new(Session)
@@ -37,7 +37,7 @@ func (sr *SessionRepo) GetUserSession(sessionID, userID string) (*Session, error
 	return s, nil
 }
 
-func (sr *SessionRepo) Destroy(sessionID string) error {
+func (sr *repo) Destroy(sessionID string) error {
 	_, err := sr.DB.Exec("DELETE FROM sessions WHERE session_id = $1", sessionID)
 	if err != nil {
 		return err
@@ -45,7 +45,7 @@ func (sr *SessionRepo) Destroy(sessionID string) error {
 	return nil
 }
 
-func (sr *SessionRepo) DestroyAll(userID string) error {
+func (sr *repo) DestroyAll(userID string) error {
 	_, err := sr.DB.Exec("DELETE FROM sessions WHERE user_id = $1", userID)
 	if err != nil {
 		return err
