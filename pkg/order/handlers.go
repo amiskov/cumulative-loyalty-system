@@ -11,13 +11,11 @@ import (
 
 	"github.com/amiskov/cumulative-loyalty-system/pkg/common"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
-	"github.com/amiskov/cumulative-loyalty-system/pkg/session"
-	"github.com/amiskov/cumulative-loyalty-system/pkg/user"
 )
 
 type IOrderService interface {
-	GetUserOrders(ctx context.Context, usr *user.User) (orders []*Order, err error)
-	AddOrder(ctx context.Context, usr *user.User, orderNum string) (*Order, error)
+	GetUserOrders(ctx context.Context) (orders []*Order, err error)
+	AddOrder(ctx context.Context, orderNum string) (*Order, error)
 }
 
 type Handler struct {
@@ -33,41 +31,19 @@ func NewOrderHandler(s IOrderService) *Handler {
 func (oh Handler) GetOrdersList(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	usr, err := session.GetAuthUser(r.Context())
-	if err != nil {
-		logger.Log(r.Context()).Errorf("order: can't get authorized user, %v", err)
-		common.WriteMsg(w, "authorization required", http.StatusUnauthorized)
-		return
-	}
-
-	orders, err := oh.service.GetUserOrders(r.Context(), usr)
+	orders, err := oh.service.GetUserOrders(r.Context())
 	if err != nil {
 		common.WriteMsg(w, "user orders not found", http.StatusBadRequest)
 		return
 	}
+
 	w.WriteHeader(http.StatusOK)
 	common.WriteRespJSON(w, orders)
 }
 
 // Add order to the loyalty system.
-//
-// Possible status code:
-// - 200 — номер заказа уже был загружен этим пользователем;
-// - 202 — новый номер заказа принят в обработку;
-// - 400 — неверный формат запроса;
-// - 401 — пользователь не аутентифицирован;
-// - 409 — номер заказа уже был загружен другим пользователем;
-// - 422 — неверный формат номера заказа;
-// - 500 — внутренняя ошибка сервера.
 func (oh Handler) AddOrder(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-
-	usr, err := session.GetAuthUser(r.Context())
-	if err != nil {
-		logger.Log(r.Context()).Errorf("order: can't get authorized user, %v", err)
-		common.WriteMsg(w, "authorization required", http.StatusUnauthorized)
-		return
-	}
 
 	// Parse order number
 	body, err := io.ReadAll(r.Body)
@@ -89,9 +65,9 @@ func (oh Handler) AddOrder(w http.ResponseWriter, r *http.Request) {
 		common.WriteMsg(w, "order number is not valid", http.StatusUnprocessableEntity)
 		return
 	}
-	validOrderNum := strconv.Itoa(orderNum)
 
-	_, err = oh.service.AddOrder(r.Context(), usr, validOrderNum)
+	// Add order number to system
+	_, err = oh.service.AddOrder(r.Context(), strconv.Itoa(orderNum))
 	if errors.Is(err, errOrderAlreadyAdded) {
 		common.WriteMsg(w, "order is already added", http.StatusOK)
 		return

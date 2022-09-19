@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http/cookiejar"
 	"time"
 
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
-	"github.com/amiskov/cumulative-loyalty-system/pkg/user"
+	"github.com/amiskov/cumulative-loyalty-system/pkg/session"
 	"github.com/go-resty/resty/v2"
 )
 
@@ -21,10 +20,17 @@ type IOrderRepo interface {
 	UpdateOrderStatus(userID, orderID, newStatus string, accrual float32) error
 }
 
-type service struct {
-	repo   IOrderRepo
-	client *resty.Client
+type IAccrual interface {
+	UpdateOrderStatus(orderNum string) error
 }
+
+type service struct {
+	repo    IOrderRepo
+	client  *resty.Client
+	accrual IAccrual
+}
+
+// TODO: Separate accrual interface to be independant from http
 
 func NewService(r IOrderRepo, accrualAddr string) (*service, error) {
 	jar, err := cookiejar.New(nil)
@@ -44,23 +50,29 @@ var (
 	errOrderExistsForOther = errors.New("order already exists for the other user")
 )
 
-func (s *service) AddOrder(ctx context.Context, usr *user.User, orderNum string) (*Order, error) {
-	o, orderErr := s.repo.GetOrder(orderNum)
+func (s *service) AddOrder(ctx context.Context, orderNum string) (*Order, error) {
+	usr, err := session.GetAuthUser(ctx)
+	if err != nil {
+		logger.Log(ctx).Errorf("order: can't get authorized user, %v", err)
+		return nil, err
+	}
+
+	ord, orderErr := s.repo.GetOrder(orderNum)
 
 	// Order is already added, just sent OK status
-	if o != nil && orderErr == nil && o.UserID == usr.ID {
+	if ord != nil && orderErr == nil && ord.UserID == usr.ID {
 		return nil, errOrderAlreadyAdded
 	}
 
 	// Order exists but for the other user
-	if o != nil && orderErr == nil && o.UserID != usr.ID {
+	if ord != nil && orderErr == nil && ord.UserID != usr.ID {
 		logger.Log(ctx).Errorf("order: user `%s` tries to get the order of user `%s`, %v",
-			usr.ID, o.UserID, orderErr)
+			usr.ID, ord.UserID, orderErr)
 		return nil, errOrderExistsForOther
 	}
 
 	// Something unknown happened
-	if o != nil && orderErr != nil {
+	if ord != nil && orderErr != nil {
 		logger.Log(ctx).Errorf("order/handlers: failed getting order`, %v", orderErr)
 		return nil, orderErr
 	}
@@ -71,26 +83,32 @@ func (s *service) AddOrder(ctx context.Context, usr *user.User, orderNum string)
 		Accrual: 0,
 		Status:  NEW,
 	}
-	err := s.repo.AddOrder(newOrder)
-	if err != nil {
+	if err := s.repo.AddOrder(newOrder); err != nil {
 		logger.Log(ctx).Errorf("order: failed add order, %w", err)
 		return nil, err
 	}
 
 	// TODO: add limitation (if tried N times with no success then stop)
-	go func(ctx context.Context, usr *user.User, orderNum string) {
+	go func(ctx context.Context, orderNum string) {
+		// Every 3 seconds check and accrual system and update the order status.
+		// If order status is `INVALID` or `PROCESSED`, then stop the ticker.
 		ticker := time.NewTicker(3 * time.Second)
 		for range ticker.C {
-			// Run query each 3 seconds and update order status.
-			// If order status is `INVALID` or `PROCESSED`, then stop the ticker.
-			s.updateOrderStatus(ctx, ticker, usr, orderNum)
+			// TODO: use either channel or cancel via context
+			s.updateOrderStatus(ctx, ticker, orderNum)
 		}
-	}(ctx, usr, orderNum)
+	}(ctx, orderNum)
 
 	return newOrder, nil
 }
 
-func (s *service) GetUserOrders(ctx context.Context, usr *user.User) (orders []*Order, err error) {
+func (s *service) GetUserOrders(ctx context.Context) (orders []*Order, err error) {
+	usr, err := session.GetAuthUser(ctx)
+	if err != nil {
+		logger.Log(ctx).Errorf("order: can't get authorized user, %v", err)
+		return
+	}
+
 	orders, err = s.repo.GetOrders(usr.ID)
 	if err != nil {
 		logger.Log(ctx).Errorf("order: can't get user orders, %v", err)
@@ -99,8 +117,13 @@ func (s *service) GetUserOrders(ctx context.Context, usr *user.User) (orders []*
 	return
 }
 
-func (s *service) updateOrderStatus(ctx context.Context, ticker *time.Ticker, usr *user.User, orderNum string) {
-	log.Println("Start order status updating...")
+func (s *service) updateOrderStatus(ctx context.Context, ticker *time.Ticker, orderNum string) {
+	usr, err := session.GetAuthUser(ctx)
+	if err != nil {
+		logger.Log(ctx).Errorf("order: can't get authorized user, %v", err)
+		return
+	}
+
 	resp, err := s.client.R().Get("/api/orders/" + orderNum)
 	if err != nil {
 		logger.Log(ctx).Errorf("order: failed sending request to accrual, %v", err)

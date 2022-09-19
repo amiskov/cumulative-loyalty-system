@@ -10,19 +10,19 @@ import (
 	"github.com/amiskov/cumulative-loyalty-system/pkg/user"
 )
 
-type (
-	IUserRepo interface {
-		GetByID(context.Context, string) (*user.User, error)
-	}
-	ISessionManager interface {
-		UserFromToken(string) (*user.User, error)
-	}
-	Auth struct {
-		UserRepo       IUserRepo
-		SessionManager ISessionManager
-		noAuthUrls     map[string]struct{}
-	}
-)
+type IUserRepo interface {
+	GetByID(context.Context, string) (*user.User, error)
+}
+
+type ISessionManager interface {
+	UserFromToken(string) (*user.User, error)
+}
+
+type Auth struct {
+	UserRepo       IUserRepo
+	SessionManager ISessionManager
+	noAuthUrls     map[string]struct{}
+}
 
 func NewAuthMiddleware(sm ISessionManager, ur IUserRepo, noAuthUrls map[string]struct{}) *Auth {
 	return &Auth{
