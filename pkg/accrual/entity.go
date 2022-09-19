@@ -18,11 +18,12 @@ type OrderAccrual struct {
 }
 
 type accrualSystem struct {
-	client       *resty.Client
-	pollInterval time.Duration
+	client  *resty.Client
+	limit   int
+	timeout time.Duration
 }
 
-func NewAccrual(i time.Duration, addr string) (*accrualSystem, error) {
+func NewAccrual(addr string, lim int, timeout time.Duration) (*accrualSystem, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, fmt.Errorf("can't create cookie jar, %w", err)
@@ -30,9 +31,18 @@ func NewAccrual(i time.Duration, addr string) (*accrualSystem, error) {
 	c := resty.New().SetBaseURL(addr).SetCookieJar(jar)
 
 	return &accrualSystem{
-		client:       c,
-		pollInterval: i,
+		client:  c,
+		limit:   lim,
+		timeout: timeout,
 	}, nil
+}
+
+func (a *accrualSystem) Limit() int {
+	return a.limit
+}
+
+func (a *accrualSystem) Timeout() time.Duration {
+	return a.timeout
 }
 
 func (a *accrualSystem) GetOrderAccrual(ctx context.Context, orderNum string) (*OrderAccrual, error) {

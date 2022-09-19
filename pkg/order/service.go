@@ -19,6 +19,8 @@ type IOrderRepo interface {
 
 type IAccrualSystem interface {
 	GetOrderAccrual(ctx context.Context, orderNum string) (*accrual.OrderAccrual, error)
+	Limit() int
+	Timeout() time.Duration
 }
 
 type service struct {
@@ -61,7 +63,7 @@ func (s *service) AddOrder(ctx context.Context, orderNum string) (*Order, error)
 
 	// Something unknown happened
 	if ord != nil && orderErr != nil {
-		logger.Log(ctx).Errorf("order/handlers: failed getting order`, %v", orderErr)
+		logger.Log(ctx).Errorf("order: failed getting order`, %v", orderErr)
 		return nil, orderErr
 	}
 
@@ -76,44 +78,46 @@ func (s *service) AddOrder(ctx context.Context, orderNum string) (*Order, error)
 		return nil, err
 	}
 
-	// TODO: add limitation (if tried N times with no success then stop)
-	go func() {
-		// Every 3 seconds check and accrual system and update the order status.
-		// If order status is `INVALID` or `PROCESSED`, then stop the ticker.
-		ticker := time.NewTicker(3 * time.Second)
+	go s.updateOrderStatus(ctx, usr.ID, orderNum)
 
-		accrualCtx, cancel := context.WithCancel(ctx)
-		defer cancel()
+	return newOrder, nil
+}
 
-		// TODO: This should not be a ticker, this should run N times until the status is INVALID or PROCESSED.
-		// Create channel `processed`
-		// change channel status if order status is INVALID or PROCESSED or timeout exceeded
-		// OR just create context with TIMEOUT and with cancel and use it instead.
-		for range ticker.C {
+func (s *service) updateOrderStatus(ctx context.Context, userID, orderNum string) {
+	done := make(chan struct{})
+	attempts := 0
+	maxAttempts := s.accrualSystem.Limit()
+	timeout := s.accrualSystem.Timeout()
+
+	for {
+		select {
+		case <-done:
+			return
+		default:
 			orderAccrual, err := s.accrualSystem.GetOrderAccrual(ctx, orderNum)
 			if err != nil {
 				logger.Log(ctx).Errorf("order: failed getting order accrual, %v", err)
-				return
+				done <- struct{}{}
 			}
 
-			if err := s.repo.UpdateOrderStatus(usr.ID, orderNum, orderAccrual.Status, orderAccrual.Accrual); err != nil {
+			if err := s.repo.UpdateOrderStatus(userID, orderNum, orderAccrual.Status, orderAccrual.Accrual); err != nil {
 				logger.Log(ctx).Errorf("order: failed updating order, %w", err)
-				return
+				done <- struct{}{}
 			}
 
 			if orderAccrual.Status == INVALID || orderAccrual.Status == PROCESSED {
-				cancel()
-				return
+				done <- struct{}{}
 			}
+
+			attempts++
+			if attempts >= maxAttempts {
+				logger.Log(ctx).Errorf("order: limit exceeded")
+				done <- struct{}{}
+			}
+
+			time.Sleep(timeout)
 		}
-
-		go func() {
-			<-accrualCtx.Done()
-			ticker.Stop()
-		}()
-	}()
-
-	return newOrder, nil
+	}
 }
 
 func (s *service) GetUserOrders(ctx context.Context) (orders []*Order, err error) {
