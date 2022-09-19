@@ -24,7 +24,7 @@ func (r *repo) GetBalance(userID string) (*Balance, error) {
 	return bal, nil
 }
 
-func (r *repo) WithdrawFromUserBalance(userID, orderId string, sumToWithdraw float32) (float32, error) {
+func (r *repo) WithdrawFromUserBalance(userID, orderID string, sumToWithdraw float32) (float32, error) {
 	// TODO: this should be transaction
 
 	q := `UPDATE users SET balance=balance-$1, withdrawn=withdrawn+$1
@@ -37,7 +37,7 @@ func (r *repo) WithdrawFromUserBalance(userID, orderId string, sumToWithdraw flo
 
 	// Add record to withdrawals table
 	_, err = r.db.Exec(`INSERT INTO withdrawals(user_id, order_id, sum) VALUES($1, $2, $3)`,
-		userID, orderId, sumToWithdraw)
+		userID, orderID, sumToWithdraw)
 	if err != nil {
 		return 0, fmt.Errorf("order/repo: failed inserting to `withdrawals` table, %w", err)
 	}

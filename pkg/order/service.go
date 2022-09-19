@@ -65,34 +65,11 @@ func (s *service) AddOrder(ctx context.Context, usr *user.User, orderNum string)
 		return nil, orderErr
 	}
 
-	// Order not found by the given number, check the accrual system.
-	// resp, err := s.client.R().Get("/api/orders/" + orderNum)
-	// if err != nil {
-	// 	logger.Log(ctx).Errorf("order: failed sending request to accrual, %v", err)
-	// 	return nil, err
-	// }
-	// fmt.Printf("RESP!!! %#v\n\n", resp.RawResponse)
-
-	// {"order":"2060100522","status":"PROCESSED","accrual":729.98}
-	// httpOrder := struct {
-	// 	Order   string
-	// 	Status  string
-	// 	Accrual float32
-	// }{}
-	// jsonErr := json.Unmarshal(resp.Body(), &httpOrder)
-	// if jsonErr != nil {
-	// 	logger.Log(ctx).Errorf("order: failed parsing response from accrual, %w", jsonErr)
-	// 	return nil, jsonErr
-	// }
-
 	newOrder := &Order{
-		Number: orderNum,
-		UserID: usr.ID,
-		// Accrual: httpOrder.Accrual,
+		Number:  orderNum,
+		UserID:  usr.ID,
 		Accrual: 0,
-		// TODO: Probably just add as 'NEW' without even checking accrual in this method
-		// and later check for PROCESSED/INVALID separately?
-		Status: "NEW",
+		Status:  "NEW",
 	}
 	err := s.repo.AddOrder(newOrder)
 	if err != nil {
@@ -106,23 +83,31 @@ func (s *service) AddOrder(ctx context.Context, usr *user.User, orderNum string)
 		for range ticker.C {
 			// Run query each 3 seconds and update order status.
 			// If order status is `INVALID` or `PROCESSED`, then stop the ticker.
-			go s.UpdateOrderStatus(ctx, ticker, usr, orderNum)
+			s.updateOrderStatus(ctx, ticker, usr, orderNum)
 		}
 	}(ctx, usr, orderNum)
 
 	return newOrder, nil
 }
 
-func (s *service) UpdateOrderStatus(ctx context.Context, ticker *time.Ticker, usr *user.User, orderNum string) {
+func (s *service) GetUserOrders(ctx context.Context, usr *user.User) (orders []*Order, err error) {
+	orders, err = s.repo.GetOrders(usr.ID)
+	if err != nil {
+		logger.Log(ctx).Errorf("order: can't get user orders, %v", err)
+		return
+	}
+	return
+}
+
+func (s *service) updateOrderStatus(ctx context.Context, ticker *time.Ticker, usr *user.User, orderNum string) {
 	log.Println("Start order status updating...")
 	resp, err := s.client.R().Get("/api/orders/" + orderNum)
 	if err != nil {
 		logger.Log(ctx).Errorf("order: failed sending request to accrual, %v", err)
 		return
 	}
-	log.Printf("RESP!!! %#v\n\n", resp.RawResponse)
 
-	// {"order":"2060100522","status":"PROCESSED","accrual":729.98}
+	// Accrual response format: `{"order":"2060100522","status":"PROCESSED","accrual":729.98}`
 	httpOrder := struct {
 		Order   string
 		Status  string
@@ -134,38 +119,13 @@ func (s *service) UpdateOrderStatus(ctx context.Context, ticker *time.Ticker, us
 		return
 	}
 
-	if httpOrder.Status != "" {
-		err := s.repo.UpdateOrderStatus(usr.ID, orderNum, httpOrder.Status, httpOrder.Accrual)
-		if err != nil {
-			logger.Log(ctx).Errorf("order: failed updating order, %w", err)
-			return
-		}
+	if err := s.repo.UpdateOrderStatus(usr.ID, orderNum, httpOrder.Status, httpOrder.Accrual); err != nil {
+		logger.Log(ctx).Errorf("order: failed updating order, %w", err)
+		return
 	}
 
 	if httpOrder.Status == `INVALID` || httpOrder.Status == `PROCESSED` {
-		log.Println("Time to stop", httpOrder.Status)
-		// TODO: update DB, then stop
 		ticker.Stop()
 		return
 	}
-
-	log.Println("Finished iteration updating...")
-
-	// newOrder := &Order{
-	// 	Number:  orderNum,
-	// 	UserID:  usr.ID,
-	// 	Accrual: httpOrder.Accrual,
-	// 	// TODO: Probably just add as 'NEW' without even checking accrual in this method
-	// 	// and later check for PROCESSED/INVALID separately?
-	// 	Status: httpOrder.Status,
-	// }
-}
-
-func (s *service) GetUserOrders(ctx context.Context, usr *user.User) (orders []*Order, err error) {
-	orders, err = s.repo.GetOrders(usr.ID)
-	if err != nil {
-		logger.Log(ctx).Errorf("order: can't get user orders, %v", err)
-		return
-	}
-	return
 }
