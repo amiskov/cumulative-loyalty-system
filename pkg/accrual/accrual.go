@@ -23,6 +23,7 @@ type accrualSystem struct {
 	timeout time.Duration
 }
 
+// TODO: We can go deeper and also create an interface for the client (HTTP, gRPC, etc)
 func NewAccrual(addr string, lim int, timeout time.Duration) (*accrualSystem, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
