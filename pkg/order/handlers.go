@@ -101,6 +101,7 @@ func (oh Handler) AddOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		logger.Log(r.Context()).Errorf("failed adding order `%d`, %v", orderNum, err)
 		common.WriteMsg(w, "can't add order", http.StatusInternalServerError)
 		return
 	}

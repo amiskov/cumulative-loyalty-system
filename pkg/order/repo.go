@@ -44,12 +44,21 @@ func (or *repo) AddOrder(order *Order) error {
 	if err != nil {
 		return fmt.Errorf("order/repo: failed inserting order, %w", err)
 	}
+	return nil
+}
+
+func (or *repo) UpdateOrderStatus(userID, orderID, newStatus string, accrual float32) error {
+	q := `UPDATE orders SET status=$1, accrual=$2 WHERE id=$3`
+	_, err := or.db.Exec(q, newStatus, accrual, orderID)
+	if err != nil {
+		return fmt.Errorf("order: failed updating order status, %w", err)
+	}
 
 	// TODO: Probably, this should be a separated process.
-	if order.Status == "PROCESSED" {
+	if newStatus == "PROCESSED" {
 		q := `UPDATE users SET balance = balance + $1 WHERE id = $2 RETURNING balance`
 		var newBalance float32
-		err := or.db.QueryRow(q, order.Accrual, order.UserID).Scan(&newBalance)
+		err := or.db.QueryRow(q, accrual, userID).Scan(&newBalance)
 		if err != nil {
 			return fmt.Errorf("order/repo: failed updating balance, %w", err)
 		}
