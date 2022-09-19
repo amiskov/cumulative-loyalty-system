@@ -54,8 +54,7 @@ func (or *repo) UpdateOrderStatus(userID, orderID, newStatus string, accrual flo
 		return fmt.Errorf("order: failed updating order status, %w", err)
 	}
 
-	// TODO: Probably, this should be a separated process.
-	if newStatus == "PROCESSED" {
+	if newStatus == PROCESSED {
 		q := `UPDATE users SET balance = balance + $1 WHERE id = $2 RETURNING balance`
 		var newBalance float32
 		err := or.db.QueryRow(q, accrual, userID).Scan(&newBalance)

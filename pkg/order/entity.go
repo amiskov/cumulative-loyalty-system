@@ -9,3 +9,10 @@ type Order struct {
 	Accrual    float32   `json:"accrual"`
 	UploadedAt time.Time `json:"uploaded_at"`
 }
+
+const (
+	PROCESSED  = "PROCESSED"
+	NEW        = "NEW"
+	INVALID    = "INVALID"
+	PROCESSING = "PROCESSING"
+)

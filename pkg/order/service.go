@@ -69,7 +69,7 @@ func (s *service) AddOrder(ctx context.Context, usr *user.User, orderNum string)
 		Number:  orderNum,
 		UserID:  usr.ID,
 		Accrual: 0,
-		Status:  "NEW",
+		Status:  NEW,
 	}
 	err := s.repo.AddOrder(newOrder)
 	if err != nil {
@@ -124,7 +124,7 @@ func (s *service) updateOrderStatus(ctx context.Context, ticker *time.Ticker, us
 		return
 	}
 
-	if httpOrder.Status == `INVALID` || httpOrder.Status == `PROCESSED` {
+	if httpOrder.Status == INVALID || httpOrder.Status == PROCESSED {
 		ticker.Stop()
 		return
 	}
