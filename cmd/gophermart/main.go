@@ -51,7 +51,7 @@ func main() {
 	balanceRepo := balance.NewRepo(db)
 	sessionRepo := session.NewSessionRepo(db)
 
-	accrualSystem, err := accrual.NewAccrual(cfg.AccrualSystemAddress, cfg.AccrualPollingLimit, cfg.AccrualPollingTimeout)
+	accrualSystem, err := accrual.NewHTTPAccrual(cfg.AccrualSystemAddress, cfg.AccrualPollingLimit, cfg.AccrualPollingTimeout)
 	if err != nil {
 		log.Fatal("failed init accrual system", err)
 	}

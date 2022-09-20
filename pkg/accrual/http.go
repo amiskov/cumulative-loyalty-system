@@ -11,42 +11,35 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
-type OrderAccrual struct {
-	Order   string
-	Status  string
-	Accrual float32
-}
-
-type accrualSystem struct {
+type accrualHTTP struct {
 	client  *resty.Client
 	limit   int
 	timeout time.Duration
 }
 
-// TODO: We can go deeper and also create an interface for the client (HTTP, gRPC, etc)
-func NewAccrual(addr string, lim int, timeout time.Duration) (*accrualSystem, error) {
+func NewHTTPAccrual(addr string, lim int, timeout time.Duration) (*accrualHTTP, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, fmt.Errorf("can't create cookie jar, %w", err)
 	}
 	c := resty.New().SetBaseURL(addr).SetCookieJar(jar)
 
-	return &accrualSystem{
+	return &accrualHTTP{
 		client:  c,
 		limit:   lim,
 		timeout: timeout,
 	}, nil
 }
 
-func (a *accrualSystem) Limit() int {
+func (a *accrualHTTP) Limit() int {
 	return a.limit
 }
 
-func (a *accrualSystem) Timeout() time.Duration {
+func (a *accrualHTTP) Timeout() time.Duration {
 	return a.timeout
 }
 
-func (a *accrualSystem) GetOrderAccrual(ctx context.Context, orderNum string) (*OrderAccrual, error) {
+func (a *accrualHTTP) GetOrderAccrual(ctx context.Context, orderNum string) (*OrderAccrual, error) {
 	orderAccrual := new(OrderAccrual)
 
 	resp, err := a.client.R().Get("/api/orders/" + orderNum)
