@@ -8,11 +8,10 @@ migdrop:
 remig:
 	make migdrop && make migup
 
-# tests
-withdraw:
-	"order": "2377225624",
-    "sum": 751
+lint:
+	echo "goimports:" && goimports -l -local -w . && echo "gofumpt:" && gofumpt -l -w .
 
+# tests
 prep:
 	cat m.json | http POST http://localhost:8888/api/goods ; \
 	cat q.json | http POST http://localhost:8888/api/orders
