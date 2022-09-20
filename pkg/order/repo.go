@@ -40,7 +40,7 @@ func (r *repo) GetOrders(ctx context.Context, userID string) ([]*Order, error) {
 }
 
 func (r *repo) AddOrder(ctx context.Context, order *Order) error {
-	_, err := r.db.ExecContext(ctx, "INSERT INTO orders(id, user_id, accrual, status) VALUES($1, $2, $3, $4)",
+	_, err := r.db.Exec("INSERT INTO orders(id, user_id, accrual, status) VALUES($1, $2, $3, $4)",
 		order.Number, order.UserID, order.Accrual, order.Status)
 	if err != nil {
 		return fmt.Errorf("order/repo: failed inserting order, %w", err)

@@ -20,7 +20,7 @@ func (r *repo) GetBalance(userID string) (*Balance, error) {
 	bal := &Balance{}
 	row := r.db.QueryRow("SELECT balance, withdrawn FROM users where id=$1", userID)
 	if err := row.Scan(&bal.Current, &bal.Withdrawn); err != nil {
-		return bal, fmt.Errorf("balance/repo: row scan failed: %w", err)
+		return bal, fmt.Errorf("balance: row scan failed: %w", err)
 	}
 	return bal, nil
 }

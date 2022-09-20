@@ -96,24 +96,26 @@ func (s *service) updateOrderStatus(ctx context.Context, userID, orderNum string
 		case <-done:
 			return
 		default:
+			attempts++
+			if attempts >= maxAttempts {
+				logger.Log(ctx).Errorf("order: can't get order accrual, max attempts exceeded")
+				done <- struct{}{}
+			}
+
 			orderAccrual, err := s.accrualClient.GetOrderAccrual(ctx, orderNum)
 			if err != nil {
 				logger.Log(ctx).Errorf("order: failed getting order accrual, %v", err)
-				done <- struct{}{}
+				time.Sleep(pause)
+				continue // try once again
 			}
 
 			if err := s.repo.UpdateOrderStatus(userID, orderNum, orderAccrual.Status, orderAccrual.Accrual); err != nil {
-				logger.Log(ctx).Errorf("order: failed updating order, %w", err)
-				done <- struct{}{}
+				logger.Log(ctx).Errorf("order: failed updating order status, %w", err)
+				time.Sleep(pause)
+				continue // try once again
 			}
 
 			if orderAccrual.Status == INVALID || orderAccrual.Status == PROCESSED {
-				done <- struct{}{}
-			}
-
-			attempts++
-			if attempts >= maxAttempts {
-				logger.Log(ctx).Errorf("order: limit exceeded")
 				done <- struct{}{}
 			}
 

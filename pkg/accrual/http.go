@@ -40,21 +40,25 @@ func (a *accrualHTTP) Interval() time.Duration {
 	return a.pollInterval
 }
 
-func (a *accrualHTTP) GetOrderAccrual(ctx context.Context, orderNum string) (*OrderAccrual, error) {
-	orderAccrual := new(OrderAccrual)
-
+func (a *accrualHTTP) GetOrderAccrual(ctx context.Context, orderNum string) (orderAccrual *OrderAccrual, err error) {
 	resp, err := a.client.Get(a.baseURL + "/api/orders/" + orderNum)
 	if err != nil {
 		logger.Log(ctx).Errorf("order: failed sending request to accrual, %v", err)
-		return nil, err
+		return
 	}
 	defer resp.Body.Close()
+
 	body, err := io.ReadAll(resp.Body)
-	jsonErr := json.Unmarshal(body, &orderAccrual)
-	if jsonErr != nil {
-		logger.Log(ctx).Errorf("order: failed parsing response from accrual, %w", jsonErr)
-		return nil, err
+	if err != nil {
+		logger.Log(ctx).Errorf("order: failed reading accrual resp body, %v", err)
+		return
 	}
 
-	return orderAccrual, nil
+	err = json.Unmarshal(body, &orderAccrual)
+	if err != nil {
+		logger.Log(ctx).Errorf("order: failed parsing response from accrual, %v", err)
+		return
+	}
+
+	return
 }
