@@ -10,9 +10,9 @@ import (
 )
 
 type IRepo interface {
-	UserExists(string) (bool, error)
-	GetByLoginAndPass(string, string) (*User, error)
-	Add(*User) (string, error)
+	UserExists(context.Context, string) (bool, error)
+	GetByLoginAndPass(context.Context, string, string) (*User, error)
+	Add(context.Context, *User) (string, error)
 }
 
 type ISessionService interface {
@@ -42,7 +42,7 @@ func (s *service) LogOutUser(ctx context.Context) error {
 }
 
 func (s *service) LoginUser(ctx context.Context, login, password string) (token string, err error) {
-	usr, err := s.repo.GetByLoginAndPass(login, password)
+	usr, err := s.repo.GetByLoginAndPass(ctx, login, password)
 	if err != nil {
 		logger.Log(ctx).Errorf("can't get the user by login `%s` and password, %v", login, err)
 		return ``, fmt.Errorf("can't get the user by login `%s`, %w", login, errUserNotFound)
@@ -58,7 +58,7 @@ func (s *service) LoginUser(ctx context.Context, login, password string) (token 
 }
 
 func (s *service) RegUser(ctx context.Context, login, password string) (token string, err error) {
-	userExists, _ := s.repo.UserExists(login)
+	userExists, _ := s.repo.UserExists(ctx, login)
 	if userExists {
 		logger.Log(ctx).Error(`user "%s" already exists`, login)
 		return ``, fmt.Errorf("can't add `%s`, %w", login, errUserAlreadyExists)
@@ -71,7 +71,7 @@ func (s *service) RegUser(ctx context.Context, login, password string) (token st
 		Password: pass,
 		// Id is handled below
 	}
-	id, err := s.repo.Add(user)
+	id, err := s.repo.Add(ctx, user)
 	if err != nil {
 		logger.Log(ctx).Errorf("user: can't add user to DB: %v", err)
 		return
@@ -80,7 +80,7 @@ func (s *service) RegUser(ctx context.Context, login, password string) (token st
 
 	token, err = s.sess.CreateToken(user)
 	if err != nil {
-		logger.Log(context.Background()).Errorf("can't create JWT token from user: %v", err)
+		logger.Log(ctx).Errorf("can't create JWT token from user: %v", err)
 		return ``, err
 	}
 

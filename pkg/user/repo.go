@@ -21,9 +21,9 @@ func NewRepo(db *sql.DB) *repo {
 	}
 }
 
-func (r *repo) Add(u *User) (string, error) {
+func (r *repo) Add(ctx context.Context, u *User) (string, error) {
 	userID := 0
-	err := r.db.QueryRow("INSERT INTO users(login, password) VALUES($1, $2) RETURNING id",
+	err := r.db.QueryRowContext(ctx, "INSERT INTO users(login, password) VALUES($1, $2) RETURNING id",
 		u.Login, u.Password).Scan(&userID)
 	if err != nil {
 		return ``, fmt.Errorf("user/repo: failed insert user, %w", err)
@@ -31,8 +31,8 @@ func (r *repo) Add(u *User) (string, error) {
 	return strconv.Itoa(userID), nil
 }
 
-func (r *repo) GetByLoginAndPass(uname string, pass string) (*User, error) {
-	row := r.db.QueryRow("SELECT id, login, password FROM users where login=$1", uname)
+func (r *repo) GetByLoginAndPass(ctx context.Context, uname string, pass string) (*User, error) {
+	row := r.db.QueryRowContext(ctx, "SELECT id, login, password FROM users where login=$1", uname)
 	u := new(User)
 	if err := row.Scan(&u.ID, &u.Login, &u.Password); err != nil {
 		return nil, fmt.Errorf("user/repo: row scan failed: %w", err)
@@ -45,8 +45,8 @@ func (r *repo) GetByLoginAndPass(uname string, pass string) (*User, error) {
 	return u, nil
 }
 
-func (r *repo) UserExists(login string) (bool, error) {
-	row := r.db.QueryRow("SELECT id FROM users where login=$1", login)
+func (r *repo) UserExists(ctx context.Context, login string) (bool, error) {
+	row := r.db.QueryRowContext(ctx, "SELECT id FROM users where login=$1", login)
 	u := new(User)
 	if err := row.Scan(&u.ID); err != nil {
 		return false, fmt.Errorf("user/repo.UserExists, could not scan row, user `%s` doesn't exist: %w", login, err)
