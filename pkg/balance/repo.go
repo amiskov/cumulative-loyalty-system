@@ -1,6 +1,7 @@
 package balance
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 )
@@ -25,21 +26,30 @@ func (r *repo) GetBalance(userID string) (*Balance, error) {
 }
 
 func (r *repo) WithdrawFromUserBalance(userID, orderID string, sumToWithdraw float32) (float32, error) {
-	// TODO: this should be transaction
+	ctx := context.TODO()
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("balance: failed init withdraw transaction, %w", err)
+	}
+	defer tx.Rollback()
 
 	q := `UPDATE users SET balance=balance-$1, withdrawn=withdrawn+$1
 		    WHERE id = $2 RETURNING balance`
 	var newBalance float32
-	err := r.db.QueryRow(q, sumToWithdraw, userID).Scan(&newBalance)
+	err = tx.QueryRow(q, sumToWithdraw, userID).Scan(&newBalance)
 	if err != nil {
-		return 0, fmt.Errorf("order/repo: failed withdraw from user balance, %w", err)
+		return 0, fmt.Errorf("balance: failed withdraw from user balance, %w", err)
 	}
 
 	// Add record to withdrawals table
-	_, err = r.db.Exec(`INSERT INTO withdrawals(user_id, order_id, sum) VALUES($1, $2, $3)`,
+	_, err = tx.Exec(`INSERT INTO withdrawals(user_id, order_id, sum) VALUES($1, $2, $3)`,
 		userID, orderID, sumToWithdraw)
 	if err != nil {
-		return 0, fmt.Errorf("order/repo: failed inserting to `withdrawals` table, %w", err)
+		return 0, fmt.Errorf("balance: failed inserting to `withdrawals` table, %w", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return 0, fmt.Errorf("balance: failed committing withdraw transaction, %w", err)
 	}
 
 	return newBalance, nil

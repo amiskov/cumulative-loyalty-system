@@ -1,6 +1,7 @@
 package order
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 )
@@ -47,9 +48,17 @@ func (or *repo) AddOrder(order *Order) error {
 	return nil
 }
 
+// TODO: pass context everywhere in repo
 func (or *repo) UpdateOrderStatus(userID, orderID, newStatus string, accrual float32) error {
+	ctx := context.TODO()
+	tx, err := or.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("order: failed init update order status transaction, %w", err)
+	}
+	defer tx.Rollback()
+
 	q := `UPDATE orders SET status=$1, accrual=$2 WHERE id=$3`
-	_, err := or.db.Exec(q, newStatus, accrual, orderID)
+	_, err = tx.Exec(q, newStatus, accrual, orderID)
 	if err != nil {
 		return fmt.Errorf("order: failed updating order status, %w", err)
 	}
@@ -57,10 +66,14 @@ func (or *repo) UpdateOrderStatus(userID, orderID, newStatus string, accrual flo
 	if newStatus == PROCESSED {
 		q := `UPDATE users SET balance = balance + $1 WHERE id = $2 RETURNING balance`
 		var newBalance float32
-		err := or.db.QueryRow(q, accrual, userID).Scan(&newBalance)
+		err = tx.QueryRow(q, accrual, userID).Scan(&newBalance)
 		if err != nil {
-			return fmt.Errorf("order/repo: failed updating balance, %w", err)
+			return fmt.Errorf("order: failed updating user balance, %w", err)
 		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("order: failed committing update order status transaction, %w", err)
 	}
 
 	return nil
