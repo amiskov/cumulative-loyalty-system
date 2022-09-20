@@ -2,6 +2,7 @@ package order
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"time"
 
@@ -47,26 +48,24 @@ func (s *service) AddOrder(ctx context.Context, orderNum string) (*Order, error)
 		return nil, err
 	}
 
-	ord, orderErr := s.repo.GetOrder(ctx, orderNum)
+	// We want `ord` to be `nil` and `ordErr` to be `sql.ErrNoRows` meaning order with `orderNum` not exists
+	ord, ordErr := s.repo.GetOrder(ctx, orderNum)
 
-	// TODO: checking order/errors below look too complex
+	// Something bad happened
+	if !errors.Is(ordErr, sql.ErrNoRows) && ord == nil {
+		logger.Log(ctx).Errorf("order: failed getting order`, %v", ordErr)
+		return nil, ordErr
+	}
 
-	// Order is already added, just sent OK status
-	if ord != nil && orderErr == nil && ord.UserID == userID {
+	// Order exists for the current user
+	if !errors.Is(ordErr, sql.ErrNoRows) && ord.UserID == userID {
 		return nil, errOrderAlreadyAdded
 	}
 
-	// Order exists but for the other user
-	if ord != nil && orderErr == nil && ord.UserID != userID {
-		logger.Log(ctx).Errorf("order: user `%s` tries to get the order of user `%s`, %v",
-			userID, ord.UserID, orderErr)
+	// Order exists for another user
+	if !errors.Is(ordErr, sql.ErrNoRows) && ord.UserID != userID {
+		logger.Log(ctx).Errorf("order: user `%s` tries to get the order of user `%s`, %v", userID, ord.UserID, ordErr)
 		return nil, errOrderExistsForOther
-	}
-
-	// Something unknown happened
-	if ord != nil && orderErr != nil {
-		logger.Log(ctx).Errorf("order: failed getting order`, %v", orderErr)
-		return nil, orderErr
 	}
 
 	newOrder := &Order{
