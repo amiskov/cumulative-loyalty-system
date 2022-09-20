@@ -2,6 +2,7 @@ package balance
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/session"
@@ -39,31 +40,29 @@ func (s *service) Withdrawals(ctx context.Context) ([]*Withdraw, error) {
 	return withdrawals, nil
 }
 
-// TODO: make checking balance and updating balance in one query
-func (s *service) Withdraw(ctx context.Context, w *Withdraw) (newBalance float32, err error) {
+func (s *service) Withdraw(ctx context.Context, w *Withdraw) (float32, error) {
 	userID, err := session.GetAuthUserID(ctx)
 	if err != nil {
 		logger.Log(ctx).Errorf("balance: can't get authorized user, %v", err)
 		return 0, err
 	}
 
-	// Get user balance
 	bal, err := s.repo.GetBalance(userID)
 	if err != nil {
 		logger.Log(ctx).Errorf("balance: can't get user balance, %v", err)
-		// common.WriteMsg(w, "can't get user balance", http.StatusBadRequest)
 		return 0, err
 	}
 
 	if w.Sum > bal.Current {
-		// common.WriteMsg(w, "not enough balance", http.StatusPaymentRequired)
-		return 0, err
+		msg := fmt.Sprintf("balance: can't withdraw sum `%f` from balance `%f`", w.Sum, bal.Current)
+		logger.Log(ctx).Error(msg)
+		return bal.Current, fmt.Errorf(msg)
 	}
 
-	newBalance, err = s.repo.WithdrawFromUserBalance(userID, w.Order, w.Sum)
+	newBalance, err := s.repo.WithdrawFromUserBalance(userID, w.Order, w.Sum)
 	if err != nil {
 		logger.Log(ctx).Errorf("balance: withdraw failed, %v", err)
-		return 0, err
+		return bal.Current, err
 	}
 
 	return newBalance, nil
