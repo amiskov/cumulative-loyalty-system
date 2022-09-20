@@ -18,17 +18,17 @@ type iService interface {
 	LogOutUser(ctx context.Context) error
 }
 
-type Handler struct {
+type handler struct {
 	service iService
 }
 
-func NewHandler(s iService) *Handler {
-	return &Handler{
+func NewHandler(s iService) *handler {
+	return &handler{
 		service: s,
 	}
 }
 
-func (uh Handler) Register(w http.ResponseWriter, r *http.Request) {
+func (h *handler) Register(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	login, pass, err := userFromRequest(r.Body)
@@ -38,7 +38,7 @@ func (uh Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := uh.service.RegUser(r.Context(), login, pass)
+	token, err := h.service.RegUser(r.Context(), login, pass)
 	if errors.Is(err, errUserAlreadyExists) {
 		msg := fmt.Sprintf(`user "%s" already exists`, login)
 		common.WriteMsg(w, msg, http.StatusConflict)
@@ -53,7 +53,7 @@ func (uh Handler) Register(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (uh Handler) LogIn(w http.ResponseWriter, r *http.Request) {
+func (h *handler) LogIn(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	login, pass, err := userFromRequest(r.Body)
@@ -63,7 +63,7 @@ func (uh Handler) LogIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := uh.service.LoginUser(r.Context(), login, pass)
+	token, err := h.service.LoginUser(r.Context(), login, pass)
 	if errors.Is(err, errUserNotFound) {
 		msg := fmt.Sprintf(`user "%s" not found`, login)
 		common.WriteMsg(w, msg, http.StatusNotFound)
@@ -78,8 +78,8 @@ func (uh Handler) LogIn(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (uh Handler) LogOut(w http.ResponseWriter, r *http.Request) {
-	err := uh.service.LogOutUser(r.Context())
+func (h *handler) LogOut(w http.ResponseWriter, r *http.Request) {
+	err := h.service.LogOutUser(r.Context())
 	if err != nil {
 		common.WriteMsg(w, "user logout failed", http.StatusInternalServerError)
 		return

@@ -16,10 +16,10 @@ func NewRepo(db *sql.DB) *repo {
 	}
 }
 
-func (or *repo) GetOrders(userID string) ([]*Order, error) {
+func (r *repo) GetOrders(ctx context.Context, userID string) ([]*Order, error) {
 	q := `SELECT id, user_id, accrual, status, uploaded_at FROM orders
 	      WHERE user_id=$1 ORDER BY uploaded_at DESC`
-	rows, err := or.db.Query(q, userID)
+	rows, err := r.db.QueryContext(ctx, q, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -39,8 +39,8 @@ func (or *repo) GetOrders(userID string) ([]*Order, error) {
 	return orders, nil
 }
 
-func (or *repo) AddOrder(order *Order) error {
-	_, err := or.db.Exec("INSERT INTO orders(id, user_id, accrual, status) VALUES($1, $2, $3, $4)",
+func (r *repo) AddOrder(ctx context.Context, order *Order) error {
+	_, err := r.db.ExecContext(ctx, "INSERT INTO orders(id, user_id, accrual, status) VALUES($1, $2, $3, $4)",
 		order.Number, order.UserID, order.Accrual, order.Status)
 	if err != nil {
 		return fmt.Errorf("order/repo: failed inserting order, %w", err)
@@ -48,10 +48,8 @@ func (or *repo) AddOrder(order *Order) error {
 	return nil
 }
 
-// TODO: pass context everywhere in repo
-func (or *repo) UpdateOrderStatus(userID, orderID, newStatus string, accrual float32) error {
-	ctx := context.TODO()
-	tx, err := or.db.BeginTx(ctx, nil)
+func (r *repo) UpdateOrderStatus(userID, orderID, newStatus string, accrual float32) error {
+	tx, err := r.db.Begin()
 	if err != nil {
 		return fmt.Errorf("order: failed init update order status transaction, %w", err)
 	}
@@ -72,17 +70,13 @@ func (or *repo) UpdateOrderStatus(userID, orderID, newStatus string, accrual flo
 		}
 	}
 
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("order: failed committing update order status transaction, %w", err)
-	}
-
-	return nil
+	return tx.Commit()
 }
 
-func (or *repo) GetOrder(orderID string) (*Order, error) {
+func (r *repo) GetOrder(ctx context.Context, orderID string) (*Order, error) {
 	o := &Order{}
 	q := `SELECT id, user_id, uploaded_at FROM orders WHERE id = $1`
-	row := or.db.QueryRow(q, orderID)
+	row := r.db.QueryRowContext(ctx, q, orderID)
 	err := row.Scan(&o.Number, &o.UserID, &o.UploadedAt)
 	if err != nil {
 		return nil, fmt.Errorf("order/repo: can't get order with id `%s`, %w", orderID, err)

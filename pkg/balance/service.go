@@ -7,17 +7,17 @@ import (
 	"github.com/amiskov/cumulative-loyalty-system/pkg/session"
 )
 
-type IBalanceRepo interface {
+type iBalanceRepo interface {
 	GetBalance(userID string) (*Balance, error)
 	WithdrawFromUserBalance(userID, orderID string, sum float32) (float32, error)
 	GetWithdrawals(userID string) ([]*Withdraw, error)
 }
 
 type service struct {
-	repo IBalanceRepo
+	repo iBalanceRepo
 }
 
-func NewService(r IBalanceRepo) *service {
+func NewService(r iBalanceRepo) *service {
 	return &service{
 		repo: r,
 	}

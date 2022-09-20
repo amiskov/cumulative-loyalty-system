@@ -13,25 +13,25 @@ import (
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
 )
 
-type IOrderService interface {
+type iOrderService interface {
 	GetUserOrders(ctx context.Context) (orders []*Order, err error)
 	AddOrder(ctx context.Context, orderNum string) (*Order, error)
 }
 
-type Handler struct {
-	service IOrderService
+type handler struct {
+	service iOrderService
 }
 
-func NewOrderHandler(s IOrderService) *Handler {
-	return &Handler{
+func NewOrderHandler(s iOrderService) *handler {
+	return &handler{
 		service: s,
 	}
 }
 
-func (oh Handler) GetOrdersList(w http.ResponseWriter, r *http.Request) {
+func (h handler) GetOrdersList(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	orders, err := oh.service.GetUserOrders(r.Context())
+	orders, err := h.service.GetUserOrders(r.Context())
 	if err != nil {
 		common.WriteMsg(w, "user orders not found", http.StatusBadRequest)
 		return
@@ -42,7 +42,7 @@ func (oh Handler) GetOrdersList(w http.ResponseWriter, r *http.Request) {
 }
 
 // Add order to the loyalty system.
-func (oh Handler) AddOrder(w http.ResponseWriter, r *http.Request) {
+func (h handler) AddOrder(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	// Parse order number
@@ -67,7 +67,7 @@ func (oh Handler) AddOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add order number to system
-	_, err = oh.service.AddOrder(r.Context(), strconv.Itoa(orderNum))
+	_, err = h.service.AddOrder(r.Context(), strconv.Itoa(orderNum))
 	if errors.Is(err, errOrderAlreadyAdded) {
 		common.WriteMsg(w, "order is already added", http.StatusOK)
 		return

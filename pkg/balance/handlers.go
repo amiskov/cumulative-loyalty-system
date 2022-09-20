@@ -10,26 +10,26 @@ import (
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
 )
 
-type IService interface {
+type iService interface {
 	GetUserBalance(ctx context.Context) (*Balance, error)
 	Withdraw(ctx context.Context, w *Withdraw) (float32, error)
 	Withdrawals(ctx context.Context) ([]*Withdraw, error)
 }
 
-type Handler struct {
-	service IService
+type handler struct {
+	service iService
 }
 
-func NewBalanceHandler(s IService) *Handler {
-	return &Handler{
+func NewBalanceHandler(s iService) *handler {
+	return &handler{
 		service: s,
 	}
 }
 
-func (bh *Handler) GetUserBalance(w http.ResponseWriter, r *http.Request) {
+func (h *handler) GetUserBalance(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	bal, err := bh.service.GetUserBalance(r.Context())
+	bal, err := h.service.GetUserBalance(r.Context())
 	if err != nil {
 		common.WriteMsg(w, "can't get user balance", http.StatusBadRequest)
 		return
@@ -37,7 +37,7 @@ func (bh *Handler) GetUserBalance(w http.ResponseWriter, r *http.Request) {
 	common.WriteRespJSON(w, bal)
 }
 
-func (bh *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
+func (h *handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	withdraw := new(Withdraw)
@@ -48,7 +48,7 @@ func (bh *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newBalance, err := bh.service.Withdraw(r.Context(), withdraw)
+	newBalance, err := h.service.Withdraw(r.Context(), withdraw)
 	if err != nil {
 		common.WriteMsg(w, "failed to withdraw from user balance", http.StatusInternalServerError)
 		return
@@ -58,10 +58,10 @@ func (bh *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	common.WriteMsg(w, msg, http.StatusOK)
 }
 
-func (bh *Handler) Withdrawals(w http.ResponseWriter, r *http.Request) {
+func (h *handler) Withdrawals(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	withdrawals, err := bh.service.Withdrawals(r.Context())
+	withdrawals, err := h.service.Withdrawals(r.Context())
 	if err != nil {
 		common.WriteMsg(w, "can't get user withdrawals", http.StatusInternalServerError)
 		return

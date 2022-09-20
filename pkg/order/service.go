@@ -11,9 +11,9 @@ import (
 )
 
 type iOrderRepo interface {
-	GetOrders(userID string) ([]*Order, error)
-	GetOrder(string) (*Order, error)
-	AddOrder(*Order) error
+	GetOrders(ctx context.Context, userID string) ([]*Order, error)
+	GetOrder(ctx context.Context, orderID string) (*Order, error)
+	AddOrder(ctx context.Context, o *Order) error
 	UpdateOrderStatus(userID, orderID, newStatus string, accrual float32) error
 }
 
@@ -47,7 +47,7 @@ func (s *service) AddOrder(ctx context.Context, orderNum string) (*Order, error)
 		return nil, err
 	}
 
-	ord, orderErr := s.repo.GetOrder(orderNum)
+	ord, orderErr := s.repo.GetOrder(ctx, orderNum)
 
 	// TODO: checking order/errors below look too complex
 
@@ -75,7 +75,7 @@ func (s *service) AddOrder(ctx context.Context, orderNum string) (*Order, error)
 		Accrual: 0,
 		Status:  NEW,
 	}
-	if err := s.repo.AddOrder(newOrder); err != nil {
+	if err := s.repo.AddOrder(ctx, newOrder); err != nil {
 		logger.Log(ctx).Errorf("order: failed add order, %w", err)
 		return nil, err
 	}
@@ -129,7 +129,7 @@ func (s *service) GetUserOrders(ctx context.Context) (orders []*Order, err error
 		return
 	}
 
-	orders, err = s.repo.GetOrders(userID)
+	orders, err = s.repo.GetOrders(ctx, userID)
 	if err != nil {
 		logger.Log(ctx).Errorf("order: can't get user orders, %v", err)
 		return
