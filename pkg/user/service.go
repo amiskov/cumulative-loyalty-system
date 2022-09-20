@@ -9,20 +9,20 @@ import (
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
 )
 
-type IRepo interface {
+type iUserRepo interface {
 	UserExists(context.Context, string) (bool, error)
 	GetByLoginAndPass(context.Context, string, string) (*User, error)
 	Add(context.Context, *User) (string, error)
 }
 
-type ISessionService interface {
+type iSessionService interface {
 	CreateToken(*User) (string, error)
 	DestroySession(context.Context) error
 }
 
 type service struct {
-	repo IRepo
-	sess ISessionService
+	repo iUserRepo
+	sess iSessionService
 }
 
 var (
@@ -30,7 +30,7 @@ var (
 	errUserNotFound      = errors.New("user not found")
 )
 
-func NewService(r IRepo, sess ISessionService) *service {
+func NewService(r iUserRepo, sess iSessionService) *service {
 	return &service{
 		repo: r,
 		sess: sess,

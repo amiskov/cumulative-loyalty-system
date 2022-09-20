@@ -10,25 +10,25 @@ import (
 	"github.com/amiskov/cumulative-loyalty-system/pkg/session"
 )
 
-type IOrderRepo interface {
+type iOrderRepo interface {
 	GetOrders(userID string) ([]*Order, error)
 	GetOrder(string) (*Order, error)
 	AddOrder(*Order) error
 	UpdateOrderStatus(userID, orderID, newStatus string, accrual float32) error
 }
 
-type IAccrualClient interface {
+type iAccrualClient interface {
 	GetOrderAccrual(ctx context.Context, orderNum string) (*accrual.OrderAccrual, error)
 	MaxAttempts() int
 	Interval() time.Duration
 }
 
 type service struct {
-	repo          IOrderRepo
-	accrualClient IAccrualClient
+	repo          iOrderRepo
+	accrualClient iAccrualClient
 }
 
-func NewService(r IOrderRepo, accSys IAccrualClient) *service {
+func NewService(r iOrderRepo, accSys iAccrualClient) *service {
 	return &service{
 		repo:          r,
 		accrualClient: accSys,

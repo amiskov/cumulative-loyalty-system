@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/amiskov/cumulative-loyalty-system/pkg/logger"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/session"
@@ -14,8 +15,7 @@ type IUserRepo interface {
 }
 
 type ISessionService interface {
-	UserFromToken(string) (*user.User, error)
-	SessionFromToken(authHeader string) (*session.Session, error)
+	GetUserSession(string) (*session.Session, error)
 }
 
 type Auth struct {
@@ -39,9 +39,10 @@ func (auth Auth) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		currentSession, err := auth.sessionService.SessionFromToken(r.Header.Get("Authorization"))
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		currentSession, err := auth.sessionService.GetUserSession(token)
 		if err != nil {
-			logger.Log(r.Context()).Errorf("auth: can't get the session form token: %v", err)
+			logger.Log(r.Context()).Errorf("auth: can't get user session form token: %v", err)
 			http.Error(w, "authorization failed", http.StatusUnauthorized)
 			return
 		}

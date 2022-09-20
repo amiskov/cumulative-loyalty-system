@@ -27,7 +27,8 @@ func (sr *repo) Add(userID, sessionID string, exp int64) error {
 }
 
 func (sr *repo) GetUserSession(sessionID, userID string) (*Session, error) {
-	q := `SELECT session_id, user_id, expiration_date FROM sessions WHERE session_id = $1 and user_id = $2`
+	q := `SELECT session_id, user_id, expiration_date FROM sessions 
+			  WHERE session_id = $1 AND user_id = $2 AND expiration_date >= NOW()`
 	row := sr.DB.QueryRow(q, sessionID, userID)
 	s := new(Session)
 	err := row.Scan(&s.ID, &s.UserID, &s.Expiration)
@@ -39,14 +40,6 @@ func (sr *repo) GetUserSession(sessionID, userID string) (*Session, error) {
 
 func (sr *repo) Destroy(sessionID string) error {
 	_, err := sr.DB.Exec("DELETE FROM sessions WHERE session_id = $1", sessionID)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (sr *repo) DestroyAll(userID string) error {
-	_, err := sr.DB.Exec("DELETE FROM sessions WHERE user_id = $1", userID)
 	if err != nil {
 		return err
 	}

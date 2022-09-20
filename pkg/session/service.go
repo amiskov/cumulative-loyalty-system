@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
-	"strings"
 	"time"
 
 	jwt "github.com/dgrijalva/jwt-go"
@@ -14,21 +12,23 @@ import (
 	"github.com/amiskov/cumulative-loyalty-system/pkg/user"
 )
 
+type iSessionRepo interface {
+	Destroy(sessionID string) error
+	GetUserSession(sessionID, userID string) (*Session, error)
+	Add(userID, sessionID string, exp int64) error
+}
+
 type sessionKey string
 
 type service struct {
 	secret []byte
-	repo   *repo
+	repo   iSessionRepo
 }
 
 type jwtClaims struct {
 	User user.User `json:"user"`
 	jwt.StandardClaims
 }
-
-const SessionKey sessionKey = "authenticatedUser"
-
-var ErrNoAuth = errors.New("session: no session found")
 
 func NewSessionService(secret string, sr *repo) *service {
 	return &service{
@@ -37,13 +37,8 @@ func NewSessionService(secret string, sr *repo) *service {
 	}
 }
 
-func (s *service) SessionFromToken(authHeader string) (*Session, error) {
-	if authHeader == "" {
-		return nil, errors.New("session: auth header not found")
-	}
-
-	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	token, err := jwt.ParseWithClaims(tokenString, &jwtClaims{},
+func (s *service) GetUserSession(token string) (*Session, error) {
+	jwtToken, err := jwt.ParseWithClaims(token, &jwtClaims{},
 		func(token *jwt.Token) (interface{}, error) {
 			return s.secret, nil
 		})
@@ -51,58 +46,15 @@ func (s *service) SessionFromToken(authHeader string) (*Session, error) {
 		return nil, err
 	}
 
-	claims, ok := token.Claims.(*jwtClaims)
-	log.Printf("Claims! %#v\n", claims)
+	claims, ok := jwtToken.Claims.(*jwtClaims)
 	if !ok {
 		return nil, errors.New("session: can't cast token to claim")
 	}
-	if !token.Valid {
+	if !jwtToken.Valid {
 		return nil, errors.New("session: token is not valid")
 	}
 
-	_, err = s.Check(claims.User.ID, claims.Id)
-	if err != nil {
-		return nil, fmt.Errorf("session: session is not valid: %w", err)
-	}
-
-	session := &Session{
-		ID:     claims.Id,
-		UserID: claims.User.ID,
-	}
-
-	return session, nil
-}
-
-// Returns logged in user if the user from JWT token is valid
-// and the session is valid.
-func (s *service) UserFromToken(authHeader string) (*user.User, error) {
-	if authHeader == "" {
-		return nil, errors.New("session: auth header not found")
-	}
-
-	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	token, err := jwt.ParseWithClaims(tokenString, &jwtClaims{},
-		func(token *jwt.Token) (interface{}, error) {
-			return s.secret, nil
-		})
-	if err != nil {
-		return nil, err
-	}
-
-	claims, ok := token.Claims.(*jwtClaims)
-	if !ok {
-		return nil, errors.New("session: can't cast token to claim")
-	}
-	if !token.Valid {
-		return nil, errors.New("session: token is not valid")
-	}
-
-	_, err = s.Check(claims.User.ID, claims.Id)
-	if err != nil {
-		return nil, fmt.Errorf("session: session is not valid: %w", err)
-	}
-
-	return &claims.User, nil
+	return s.repo.GetUserSession(claims.Id, claims.User.ID)
 }
 
 func (s *service) DestroySession(ctx context.Context) error {
@@ -111,38 +63,6 @@ func (s *service) DestroySession(ctx context.Context) error {
 		return err
 	}
 	return s.repo.Destroy(sessionID)
-}
-
-// Goes through all user sessions and removes expired ones.
-func (s *service) CleanupUserSessions(userID string) error {
-	return s.repo.DestroyAll(userID)
-}
-
-func (s *service) Check(userID, sessionID string) (bool, error) {
-	session, err := s.repo.GetUserSession(sessionID, userID)
-	if err != nil {
-		return false, fmt.Errorf("session: failed get user session, %w", err)
-	}
-
-	// Check user session for expiration
-	expiredTS := session.Expiration.Unix()
-	nowTS := time.Now().Unix()
-	if nowTS > expiredTS {
-		return false, errors.New("session: session has beed expired")
-	}
-
-	// Prolongate session expiration time if it expires in less than 24 hours
-	// because we don't want to kick off the active user.
-	if expiredTS-nowTS < int64((24 * time.Hour).Seconds()) {
-		newExpDate := time.Now().Add(90 * 24 * time.Hour).Unix()
-		err := s.repo.Add(userID, sessionID, newExpDate)
-		if err != nil {
-			log.Println("session: can't save session to repo", err)
-			return false, err
-		}
-	}
-
-	return true, nil
 }
 
 func (s *service) CreateToken(user *user.User) (string, error) {
