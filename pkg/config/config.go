@@ -9,24 +9,26 @@ import (
 )
 
 type Config struct {
-	RunAddress            string
-	DatabaseURI           string
-	AccrualSystemAddress  string        // full address, like `http//localhost:8888`
-	AccrualPollingLimit   int           // max attempts to get order info from accrual system
-	AccrualPollingTimeout time.Duration // timeout between attempts to get order info from accrual system
-	LogLevel              string
-	SecretKey             string
+	RunAddress             string
+	DatabaseURI            string
+	AccrualSystemAddress   string        // full address, like `http//localhost:8888`
+	AccrualPollingLimit    int           // max attempts to get order info from accrual system
+	AccrualPollingInterval time.Duration // pause between attempts to get an order info from accrual
+	AccrualRequestTimeout  time.Duration
+	LogLevel               string
+	SecretKey              string
 }
 
 func Parse() *Config {
 	cfg := Config{
 		// Defaults
-		RunAddress:            "localhost:8080",
-		AccrualSystemAddress:  "http://localhost:8888",
-		AccrualPollingLimit:   100,
-		AccrualPollingTimeout: 1 * time.Second,
-		SecretKey:             "secret",
-		LogLevel:              "debug",
+		RunAddress:             "localhost:8080",
+		AccrualSystemAddress:   "http://localhost:8888",
+		AccrualPollingLimit:    100,
+		AccrualPollingInterval: 1 * time.Second,
+		AccrualRequestTimeout:  3 * time.Second,
+		SecretKey:              "secret",
+		LogLevel:               "debug",
 	}
 	cfg.updateFromFlags()
 	cfg.updateFromEnv()
@@ -37,10 +39,12 @@ func (cfg *Config) updateFromFlags() {
 	flagRunAddress := flag.String("a", cfg.RunAddress, "Server address.")
 	flagDatabaseURI := flag.String("d", cfg.DatabaseURI, "Postgres DSN.")
 	flagAccrualAddress := flag.String("r", cfg.AccrualSystemAddress, "Accrual System address.")
-	flagAccrualPollingTimeout := flag.Duration("i", cfg.AccrualPollingTimeout,
+	flagAccrualPollingInterval := flag.Duration("i", cfg.AccrualPollingInterval,
 		"Pause between attempts to get order accrual.")
 	flagAccrualPollingLimit := flag.Int("l", cfg.AccrualPollingLimit,
 		"Max attempts to get order accrual from the accrual system.")
+	flagAccrualRequestTimeout := flag.Duration("t", cfg.AccrualPollingInterval,
+		"Pause between attempts to get order accrual.")
 
 	flag.Parse()
 
@@ -48,7 +52,8 @@ func (cfg *Config) updateFromFlags() {
 	cfg.DatabaseURI = *flagDatabaseURI
 	cfg.AccrualSystemAddress = *flagAccrualAddress
 	cfg.AccrualPollingLimit = *flagAccrualPollingLimit
-	cfg.AccrualPollingTimeout = *flagAccrualPollingTimeout
+	cfg.AccrualPollingInterval = *flagAccrualPollingInterval
+	cfg.AccrualRequestTimeout = *flagAccrualRequestTimeout
 }
 
 func (cfg *Config) updateFromEnv() {
@@ -68,12 +73,19 @@ func (cfg *Config) updateFromEnv() {
 		}
 		cfg.AccrualPollingLimit = limit
 	}
-	if timeout, ok := os.LookupEnv("ACCRUAL_POLLING_TIMEOUT"); ok {
+	if interval, ok := os.LookupEnv("ACCRUAL_POLLING_INTERVAL"); ok {
+		i, err := strconv.Atoi(interval)
+		if err != nil {
+			log.Fatal("bad accrual polling interval value, must be int (seconds)")
+		}
+		cfg.AccrualPollingInterval = time.Duration(i) * time.Second
+	}
+	if timeout, ok := os.LookupEnv("ACCRUAL_REQUEST_TIMEOUT"); ok {
 		t, err := strconv.Atoi(timeout)
 		if err != nil {
-			log.Fatal("bad accrual polling timeout value, must be int (seconds)")
+			log.Fatal("bad accrual request timeout value, must be int (seconds)")
 		}
-		cfg.AccrualPollingTimeout = time.Duration(t) * time.Second
+		cfg.AccrualRequestTimeout = time.Duration(t) * time.Second
 	}
 	if secret, ok := os.LookupEnv("SECRET_KEY"); ok {
 		cfg.SecretKey = secret

@@ -17,21 +17,21 @@ type IOrderRepo interface {
 	UpdateOrderStatus(userID, orderID, newStatus string, accrual float32) error
 }
 
-type IAccrualSystem interface {
+type IAccrualClient interface {
 	GetOrderAccrual(ctx context.Context, orderNum string) (*accrual.OrderAccrual, error)
-	Limit() int
-	Timeout() time.Duration
+	MaxAttempts() int
+	Interval() time.Duration
 }
 
 type service struct {
 	repo          IOrderRepo
-	accrualSystem IAccrualSystem
+	accrualClient IAccrualClient
 }
 
-func NewService(r IOrderRepo, accSys IAccrualSystem) *service {
+func NewService(r IOrderRepo, accSys IAccrualClient) *service {
 	return &service{
 		repo:          r,
-		accrualSystem: accSys,
+		accrualClient: accSys,
 	}
 }
 
@@ -88,15 +88,15 @@ func (s *service) AddOrder(ctx context.Context, orderNum string) (*Order, error)
 func (s *service) updateOrderStatus(ctx context.Context, userID, orderNum string) {
 	done := make(chan struct{})
 	attempts := 0
-	maxAttempts := s.accrualSystem.Limit()
-	timeout := s.accrualSystem.Timeout()
+	maxAttempts := s.accrualClient.MaxAttempts()
+	pause := s.accrualClient.Interval()
 
 	for {
 		select {
 		case <-done:
 			return
 		default:
-			orderAccrual, err := s.accrualSystem.GetOrderAccrual(ctx, orderNum)
+			orderAccrual, err := s.accrualClient.GetOrderAccrual(ctx, orderNum)
 			if err != nil {
 				logger.Log(ctx).Errorf("order: failed getting order accrual, %v", err)
 				done <- struct{}{}
@@ -117,7 +117,7 @@ func (s *service) updateOrderStatus(ctx context.Context, userID, orderNum string
 				done <- struct{}{}
 			}
 
-			time.Sleep(timeout)
+			time.Sleep(pause)
 		}
 	}
 }

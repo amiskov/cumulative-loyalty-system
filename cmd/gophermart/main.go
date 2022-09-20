@@ -51,13 +51,11 @@ func main() {
 	balanceRepo := balance.NewRepo(db)
 	sessionRepo := session.NewSessionRepo(db)
 
-	accrualSystem, err := accrual.NewHTTPAccrual(cfg.AccrualSystemAddress, cfg.AccrualPollingLimit, cfg.AccrualPollingTimeout)
-	if err != nil {
-		log.Fatal("failed init accrual system", err)
-	}
+	accrualClient := accrual.NewHTTPClient(cfg.AccrualSystemAddress,
+		cfg.AccrualPollingLimit, cfg.AccrualRequestTimeout, cfg.AccrualPollingInterval)
 
 	sessionService := session.NewSessionService(cfg.SecretKey, sessionRepo)
-	orderService := order.NewService(orderRepo, accrualSystem)
+	orderService := order.NewService(orderRepo, accrualClient)
 	userService := user.NewService(userRepo, sessionService)
 	balanceService := balance.NewService(balanceRepo)
 
