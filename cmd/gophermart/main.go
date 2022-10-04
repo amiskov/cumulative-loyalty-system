@@ -13,7 +13,7 @@ import (
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/gorilla/mux"
-	_ "github.com/jackc/pgx/v4/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/amiskov/cumulative-loyalty-system/pkg/accrual"
 	"github.com/amiskov/cumulative-loyalty-system/pkg/balance"
